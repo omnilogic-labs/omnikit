@@ -1,0 +1,9 @@
+{
+  "name": "artistic-vision",
+  "version": "0.2.0",
+  "description": "Gemini-powered image intelligence (describe, generate, edit, ocr, detect, extract, diff, compare, analyze, batch) plus Sharp-powered local manipulation (info, resize, upscale, crop, palette, optimize, convert, sprite sheets).",
+  "author": {
+    "name": "Omnilogic Labs",
+    "url": "https://github.com/omnilogic-labs"
+  }
+}

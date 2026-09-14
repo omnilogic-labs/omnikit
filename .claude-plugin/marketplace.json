@@ -1,0 +1,122 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "omnikit",
+  "version": "1.0.0",
+  "description": "Cross-platform agent skills for browser automation and image generation and manipulation. By Omnilogic Labs.",
+  "owner": {
+    "name": "Omnilogic Labs",
+    "url": "https://github.com/omnilogic-labs"
+  },
+  "plugins": [
+    {
+      "name": "browser-buddy",
+      "description": "Browser automation via Vercel's agent-browser CLI. Ships the agent-browser skill (snapshot-ref workflow, session hygiene, JPEG screenshots) and the browser-buddy agent: a sonnet-powered operator that takes a high-level browsing or testing task and returns a concise findings report.",
+      "source": "./plugins/browser-buddy",
+      "category": "automation",
+      "version": "0.5.0",
+      "author": {
+        "name": "Omnilogic Labs",
+        "url": "https://github.com/omnilogic-labs"
+      },
+      "homepage": "https://github.com/omnilogic-labs/omnikit/tree/main/plugins/browser-buddy",
+      "keywords": ["browser", "automation", "scraping", "testing", "screenshots"]
+    },
+    {
+      "name": "artistic-vision",
+      "description": "Gemini-powered image intelligence (describe, generate, edit, ocr, detect, extract, diff, compare, analyze, batch) plus Sharp-powered local manipulation (info, resize, upscale, crop, palette, optimize, convert, sprite sheets). Use when the user needs to understand, create, edit, or process images.",
+      "source": "./plugins/artistic-vision",
+      "category": "creative",
+      "version": "0.2.0",
+      "author": {
+        "name": "Omnilogic Labs",
+        "url": "https://github.com/omnilogic-labs"
+      },
+      "homepage": "https://github.com/omnilogic-labs/omnikit/tree/main/plugins/artistic-vision",
+      "keywords": [
+        "image",
+        "generation",
+        "editing",
+        "gemini",
+        "sharp",
+        "vision",
+        "ocr",
+        "detection",
+        "sprite-sheet",
+        "creative"
+      ]
+    },
+    {
+      "name": "onepassword",
+      "description": "Reliable secret retrieval from 1Password via the op CLI. Resolves native op or the Windows op.exe under WSL, reveals concealed fields, and strips the carriage returns and wrapping quotes that corrupt SSH keys and tokens. Use when the user wants to read a secret, API key, or SSH key from 1Password, or inject secrets into a command or env file.",
+      "source": "./plugins/onepassword",
+      "category": "development",
+      "version": "0.1.0",
+      "author": {
+        "name": "Omnilogic Labs",
+        "url": "https://github.com/omnilogic-labs"
+      },
+      "homepage": "https://github.com/omnilogic-labs/omnikit/tree/main/plugins/onepassword",
+      "keywords": ["1password", "secrets", "op", "ssh-keys", "credentials"]
+    },
+    {
+      "name": "render",
+      "description": "Work with Render.com: author and manage render.yaml blueprints, SSH into running services with the host-key flags Render requires, understand the hosting model (services, regions, internal networking, on-box paths), and call the REST API. Use when the user wants to deploy or configure a Render service, ssh into a Render host, run a migration, or query the Render API.",
+      "source": "./plugins/render",
+      "category": "development",
+      "version": "0.1.0",
+      "author": {
+        "name": "Omnilogic Labs",
+        "url": "https://github.com/omnilogic-labs"
+      },
+      "homepage": "https://github.com/omnilogic-labs/omnikit/tree/main/plugins/render",
+      "keywords": ["render", "deployment", "render.yaml", "ssh", "hosting", "api"]
+    },
+    {
+      "name": "night-shift",
+      "description": "Run a board of work unattended. A roster of small composable agents (orchestrator, delegate, planner, researcher, scout, verifier, fixer, integrator), three skills (task-triage, worktree-pipeline, task-tracking), and the /orchestrate, /drain, and /abort commands. Triages open issues, builds each unit in its own worktree, grades it against criteria it did not write, and lands it. All project specifics live in a .claude/night-shift.md adapter.",
+      "source": "./plugins/night-shift",
+      "category": "development",
+      "version": "0.3.0",
+      "author": {
+        "name": "Omnilogic Labs",
+        "url": "https://github.com/omnilogic-labs"
+      },
+      "homepage": "https://github.com/omnilogic-labs/omnikit/tree/main/plugins/night-shift",
+      "keywords": [
+        "agents",
+        "orchestration",
+        "worktrees",
+        "github-issues",
+        "triage",
+        "automation",
+        "unattended"
+      ]
+    },
+    {
+      "name": "primer",
+      "description": "Turn a vague product idea into a primer build-brief, decompose it into idempotent dependency-ordered task files, and run the build with a dynamic Workflow (parallel where safe) or the vendored primer-exec runner. Use when the user has a fuzzy concept and wants it turned into a buildable plan, says 'make a primer', 'bootstrap a project from this idea', or 'run the build'.",
+      "source": "./plugins/primer",
+      "category": "development",
+      "version": "0.1.0",
+      "author": {
+        "name": "Omnilogic Labs",
+        "url": "https://github.com/omnilogic-labs"
+      },
+      "homepage": "https://github.com/omnilogic-labs/omnikit/tree/main/plugins/primer",
+      "keywords": ["primer", "scaffolding", "workflow", "bootstrap", "claude-code"]
+    },
+    {
+      "name": "plain-writing",
+      "description": "Write prose a reader understands on the first pass: documentation, findings, status updates, summaries, commit messages and pull request descriptions. Targets the habits that make technical writing hard to use, including delayed claims, invented vocabulary, judgements in place of measurements, and over-compression. Ships the rules, a ten-step revision pass, before and after rewrites, and skeletons for common document types.",
+      "source": "./plugins/plain-writing",
+      "category": "development",
+      "version": "0.1.0",
+      "author": {
+        "name": "Omnilogic Labs",
+        "url": "https://github.com/omnilogic-labs"
+      },
+      "homepage": "https://github.com/omnilogic-labs/omnikit/tree/main/plugins/plain-writing",
+      "keywords": ["writing", "documentation", "plain-language", "editing", "style", "clarity"]
+    }
+  ]
+}

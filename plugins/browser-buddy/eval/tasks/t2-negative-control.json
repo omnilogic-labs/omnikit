@@ -1,0 +1,27 @@
+{
+  "id": "t2-negative-control",
+  "title": "Negative control, working contact form",
+  "prompt": "Test the contact form at {{BASE}}/clean.html thoroughly. Try the happy path and try invalid input. Report whether the form works correctly and list any defects you find.",
+  "max_turns": 120,
+  "required_urls": ["/clean.html"],
+  "expected_defects": [],
+  "expected_facts": [
+    {
+      "id": "verdict-works",
+      "description": "Concludes the form works correctly",
+      "patterns": [
+        "work(s|ing|ed)? (correctly|as expected|fine|properly)",
+        "no (defects|issues|problems)",
+        "functions correctly",
+        "behaves correctly"
+      ]
+    }
+  ],
+  "must_not_flag": [
+    {
+      "page": "/clean.html",
+      "description": "This page is a negative control with zero planted defects. Every reported defect is a false positive.",
+      "patterns": ["contact"]
+    }
+  ]
+}

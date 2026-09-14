@@ -1,0 +1,20 @@
+{
+  "id": "t3-extraction",
+  "title": "Hidden fact extraction, portal modal",
+  "prompt": "Go to {{BASE}}/modal.html and find the booking reference code that the page shows. Report the exact code.",
+  "max_turns": 60,
+  "required_urls": ["/modal.html"],
+  "expected_defects": [],
+  "expected_facts": [
+    {
+      "id": "booking-ref",
+      "description": "The booking reference is exactly ZX-4417. It is absent from the initial DOM, is built at click time, and is invisible to snapshot -i even after the dialog opens.",
+      "patterns": ["ZX-4417"],
+      "hallucination_check": {
+        "note": "Any other code of the form XX-0000 reported as the answer is a fabrication.",
+        "pattern": "\\b[A-Z]{2}-\\d{4}\\b"
+      }
+    }
+  ],
+  "must_not_flag": []
+}

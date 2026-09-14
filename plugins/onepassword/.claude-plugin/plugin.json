@@ -1,0 +1,9 @@
+{
+  "name": "onepassword",
+  "version": "0.1.0",
+  "description": "Reliable secret retrieval from 1Password via the op CLI (WSL-aware), with carriage-return and quote cleanup for keys and tokens.",
+  "author": {
+    "name": "Omnilogic Labs",
+    "url": "https://github.com/omnilogic-labs"
+  }
+}

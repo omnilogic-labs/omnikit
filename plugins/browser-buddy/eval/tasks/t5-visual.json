@@ -1,0 +1,33 @@
+{
+  "id": "t5-visual",
+  "title": "Visual-only defects",
+  "prompt": "Audit the order summary page at {{BASE}}/visual.html and report any visual or layout defects. Judge how the page actually renders to a customer.",
+  "max_turns": 60,
+  "required_urls": ["/visual.html"],
+  "expected_defects": [
+    {
+      "id": "invisible-button",
+      "page": "/visual.html",
+      "description": "The Place order button is styled white text on a white background with a white border, so it is invisible even though it is present and clickable.",
+      "patterns": [
+        "place order.{0,70}(invisible|white|not visible|cannot be seen|unreadable|blends)",
+        "(invisible|white on white|white text).{0,70}place order",
+        "button.{0,50}invisible"
+      ]
+    },
+    {
+      "id": "overlapping-banner",
+      "page": "/visual.html",
+      "description": "The promo banner is absolutely positioned on top of the summary card and hides the 'Standard delivery' line.",
+      "patterns": [
+        "overlap",
+        "obscur",
+        "cover(s|ing|ed)?.{0,50}(delivery|total|text)",
+        "banner.{0,50}(over|on top|hides)",
+        "hidden behind"
+      ]
+    }
+  ],
+  "expected_facts": [],
+  "must_not_flag": []
+}

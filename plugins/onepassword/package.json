@@ -1,0 +1,18 @@
+{
+  "name": "onepassword",
+  "version": "0.1.0",
+  "description": "Reliable secret retrieval from 1Password via the op CLI (WSL-aware), with carriage-return and quote cleanup for keys and tokens.",
+  "private": true,
+  "author": {
+    "name": "Omnilogic Labs",
+    "url": "https://github.com/omnilogic-labs"
+  },
+  "license": "MIT",
+  "scripts": {
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.8.2",
+    "prettier-plugin-sh": "^0.18.1"
+  }
+}

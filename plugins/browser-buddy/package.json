@@ -1,0 +1,21 @@
+{
+  "name": "browser-buddy",
+  "version": "0.3.3",
+  "description": "Browser automation plugin: the agent-browser skill plus the browser-buddy operator agent. Vendors Vercel's agent-browser CLI through Bun workspaces.",
+  "private": true,
+  "author": {
+    "name": "Omnilogic Labs",
+    "url": "https://github.com/omnilogic-labs"
+  },
+  "license": "MIT",
+  "scripts": {
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "agent-browser": "^0.33.1"
+  },
+  "devDependencies": {
+    "prettier": "^3.8.2",
+    "prettier-plugin-sh": "^0.18.1"
+  }
+}

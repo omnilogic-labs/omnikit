@@ -1,0 +1,5 @@
+{
+  "name": "omnikit",
+  "version": "1.0.0",
+  "description": "Cross-platform agent skills for browser automation, image generation, writing, secrets, hosting, and unattended build runs."
+}

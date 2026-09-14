@@ -1,0 +1,35 @@
+{
+  "id": "t6-depth",
+  "title": "Patience and depth",
+  "prompt": "Two checks at {{BASE}}. First, confirm whether the shipping status page at /slow.html loads its content correctly. Second, review every row of the price list starting at /table.html?page=1 and report any bad or suspicious data.",
+  "max_turns": 120,
+  "required_urls": ["/slow.html", "/table.html?page=1", "/table.html?page=2", "/table.html?page=3"],
+  "expected_defects": [
+    {
+      "id": "negative-price",
+      "page": "/table.html?page=3",
+      "description": "SKU-1027 / Component 27 on page 3 has a negative unit price of -$14.00",
+      "patterns": ["sku-1027", "component 27", "-\\s?\\$?14", "negative (unit )?price"]
+    }
+  ],
+  "expected_facts": [
+    {
+      "id": "slow-loads-fine",
+      "description": "Concludes the shipping status page does load correctly, just after a delay",
+      "patterns": [
+        "load(s|ed|ing)? (correctly|fine|successfully|ok)",
+        "after (a|the)? ?(3|three|short)? ?second",
+        "delay",
+        "eventually load",
+        "works"
+      ]
+    }
+  ],
+  "must_not_flag": [
+    {
+      "page": "/slow.html",
+      "description": "The shipping status page is correct, only slow. Calling it blank, broken or failing to load is a false positive caused by not waiting.",
+      "patterns": ["shipping status", "slow\\.html"]
+    }
+  ]
+}

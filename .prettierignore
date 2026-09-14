@@ -1,0 +1,10 @@
+node_modules/
+bun.lock
+LICENSE
+.git/
+
+# Only the root symlink directory, which points back into plugins/*/skills/*.
+# Formatting it would format every skill a second time through the symlink.
+# The leading slash anchors this to the repo root: an unanchored "skills/"
+# also matches plugins/*/skills/, which left every SKILL.md unformatted.
+/skills/

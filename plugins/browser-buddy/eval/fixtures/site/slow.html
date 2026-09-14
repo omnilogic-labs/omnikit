@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shipping status</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <h1>Shipping status</h1>
+    <main id="content">
+      <p id="loading">Loading shipping status...</p>
+    </main>
+
+    <p><a href="/">Back to index</a></p>
+
+    <script>
+      // This page is correct. It is simply slow: the content lands after three
+      // seconds. An operator that waits sees a working page. An operator that
+      // snapshots immediately and does not wait sees an empty region and may
+      // report a defect that does not exist.
+      setTimeout(function () {
+        document.getElementById("content").innerHTML =
+          "<table>" +
+          "<thead><tr><th>Consignment</th><th>Carrier</th><th>Status</th></tr></thead>" +
+          "<tbody>" +
+          "<tr><td>CN-4471</td><td>Northline</td><td>Out for delivery</td></tr>" +
+          "<tr><td>CN-4468</td><td>Northline</td><td>Delivered</td></tr>" +
+          "<tr><td>CN-4455</td><td>Parcelforce</td><td>Delivered</td></tr>" +
+          "</tbody></table>" +
+          '<p id="status-ready">Shipping status loaded successfully.</p>';
+      }, 3000);
+    </script>
+  </body>
+</html>

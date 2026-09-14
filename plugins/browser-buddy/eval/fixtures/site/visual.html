@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Order summary</title>
+    <link rel="stylesheet" href="/style.css" />
+    <style>
+      /* Planted defect 1: the primary action is white on white. The button is
+         present, focusable and named correctly in the accessibility tree, so a
+         snapshot looks healthy. Only a rendered screenshot shows it is invisible. */
+      #place-order {
+        background: #ffffff;
+        color: #ffffff;
+        border: 1px solid #ffffff;
+      }
+
+      /* Planted defect 2: the promo banner is absolutely positioned on top of the
+         order total, covering it. Again invisible to the accessibility tree. */
+      .summary {
+        position: relative;
+      }
+      .promo {
+        position: absolute;
+        top: 4.6rem;
+        left: 0;
+        right: 0;
+        background: #fff3cd;
+        border: 1px solid #ffe08a;
+        padding: 0.5rem 0.75rem;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Order summary</h1>
+
+    <div class="card summary">
+      <p>Titanium bracket, 12mm &times; 2</p>
+      <p>Standard delivery</p>
+      <p id="total"><strong>Order total: $74.50</strong></p>
+      <p>VAT included at 20%.</p>
+      <div class="promo">Spring promotion applied: free returns for 60 days.</div>
+    </div>
+
+    <button type="button" id="place-order">Place order</button>
+
+    <p><a href="/">Back to index</a></p>
+  </body>
+</html>

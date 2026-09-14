@@ -1,0 +1,9 @@
+{
+  "name": "plain-writing",
+  "version": "0.1.0",
+  "description": "Write prose a reader understands on the first pass: documentation, findings, status updates, commit messages and pull request descriptions. Rules, a revision pass, before and after rewrites, and skeletons for common document types.",
+  "author": {
+    "name": "Omnilogic Labs",
+    "url": "https://github.com/omnilogic-labs"
+  }
+}

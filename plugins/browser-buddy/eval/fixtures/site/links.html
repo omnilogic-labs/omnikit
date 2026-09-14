@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Site directory</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <h1>Site directory</h1>
+    <p>Every section of the staging site.</p>
+
+    <nav>
+      <ul>
+        <li><a href="/clean.html">Contact us</a></li>
+        <li><a href="/modal.html">Booking reference lookup</a></li>
+        <li><a href="/visual.html">Order summary</a></li>
+        <li><a href="/table.html?page=1">Price list</a></li>
+        <!-- Planted defect 1: this target does not exist and returns a real 404. -->
+        <li><a href="/gone">Warranty terms</a></li>
+        <!-- Planted defect 2: dead placeholder link, clicking does nothing. -->
+        <li><a href="#">Support portal</a></li>
+      </ul>
+    </nav>
+
+    <p><a href="/">Back to index</a></p>
+  </body>
+</html>

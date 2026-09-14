@@ -1,0 +1,118 @@
+#!/bin/bash
+# `art` entry point. Makes sure the artistic-vision runtime dependencies resolve
+# before handing off to the TypeScript CLI.
+#
+# Claude Code copies this plugin to ~/.claude/plugins/cache/<marketplace>/
+# artistic-vision/<version>/, where no node_modules exists above the scripts, so
+# a `bun install` in a clone of the repo does not help the installed copy. On the
+# first run from such a copy this script installs the declared dependencies into
+# the plugin root once; afterwards it is a few stat calls and adds no measurable
+# startup cost. Inside the repo workspace the root install already satisfies the
+# dependencies, so nothing is installed and no duplicate tree is created.
+#
+# Status goes to stderr. Machine output on stdout belongs to the CLI alone.
+set -e
+
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPTS_DIR="$BIN_DIR/../scripts"
+ENTRY="$SCRIPTS_DIR/index.ts"
+
+die() {
+  echo "art: $1" >&2
+  exit 1
+}
+
+if ! command -v bun > /dev/null 2>&1; then
+  die "bun is required to run this CLI but was not found on PATH.
+  Install it from https://bun.sh (curl -fsSL https://bun.sh/install | bash),
+  then re-run this command."
+fi
+
+# The plugin root is the nearest ancestor holding the package.json that declares
+# the runtime dependencies.
+plugin_root() {
+  local dir="$BIN_DIR"
+  while [ "$dir" != "/" ]; do
+    if [ -f "$dir/package.json" ]; then
+      printf '%s\n' "$dir"
+      return 0
+    fi
+    dir="$(dirname "$dir")"
+  done
+  return 1
+}
+
+# Dependency names from the "dependencies" block of the plugin package.json, so
+# this stays correct when the dependency set changes.
+declared_deps() {
+  awk '
+    /"dependencies"[[:space:]]*:[[:space:]]*\{/ { inblock = 1; next }
+    inblock && /^[[:space:]]*\}/ { inblock = 0; next }
+    inblock && match($0, /"[^"]+"[[:space:]]*:/) {
+      key = substr($0, RSTART + 1, RLENGTH - 1)
+      sub(/"[[:space:]]*:$/, "", key)
+      print key
+    }
+  ' "$1"
+}
+
+# Bun resolves modules by walking up from the importing file, so mirror that walk
+# and report the packages no ancestor provides. Uses -e, which is false for a
+# dangling symlink (a workspace copy taken out of its checkout looks like that).
+missing_deps() {
+  local pkg dir found
+  for pkg in "$@"; do
+    found=""
+    dir="$SCRIPTS_DIR"
+    while :; do
+      if [ -e "$dir/node_modules/$pkg" ]; then
+        found=1
+        break
+      fi
+      [ "$dir" = "/" ] && break
+      dir="$(dirname "$dir")"
+    done
+    [ -n "$found" ] || printf '%s\n' "$pkg"
+  done
+}
+
+PLUGIN_ROOT="$(plugin_root)" || die "could not locate the plugin package.json above $BIN_DIR"
+SCRIPTS_DIR="$(cd "$SCRIPTS_DIR" && pwd)"
+
+DEPS="$(declared_deps "$PLUGIN_ROOT/package.json")"
+MISSING="$(missing_deps $DEPS)"
+
+if [ -n "$MISSING" ]; then
+  # Another `art` process may already be installing into the same plugin root.
+  # Wait a bounded time for it rather than running two installs side by side.
+  LOCK="$PLUGIN_ROOT/.art-install.lock"
+  waited=0
+  while ! mkdir "$LOCK" 2> /dev/null; do
+    if [ "$waited" -ge 120 ]; then
+      rmdir "$LOCK" 2> /dev/null || true
+      break
+    fi
+    sleep 0.5
+    waited=$((waited + 1))
+  done
+  trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
+
+  # The other process may have finished the install while we waited.
+  MISSING="$(missing_deps $DEPS)"
+  if [ -n "$MISSING" ]; then
+    echo "art: installing runtime dependencies into $PLUGIN_ROOT (first run only)" >&2
+    echo "art: missing $(echo $MISSING | tr '\n' ' ')" >&2
+    if ! bun install --cwd "$PLUGIN_ROOT" 1>&2; then
+      die "dependency install failed. Run it by hand and re-try:
+  bun install --cwd \"$PLUGIN_ROOT\""
+    fi
+    MISSING="$(missing_deps $DEPS)"
+    [ -z "$MISSING" ] || die "still missing after install: $(echo $MISSING | tr '\n' ' ').
+  Run it by hand and re-try: bun install --cwd \"$PLUGIN_ROOT\""
+  fi
+
+  rmdir "$LOCK" 2> /dev/null || true
+  trap - EXIT
+fi
+
+exec bun "$ENTRY" "$@"

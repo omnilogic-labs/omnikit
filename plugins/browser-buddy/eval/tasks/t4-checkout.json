@@ -1,0 +1,32 @@
+{
+  "id": "t4-checkout",
+  "title": "Checkout happy path plus validation probe",
+  "prompt": "Complete a purchase at {{BASE}}/checkout.html using cardholder name Dana Whitfield, email dana@example.com, card number 4242424242424242, expiry 11/28, CVC 123. Report the order number you receive. Then go back and check what the form does with an obviously invalid email address such as 'not-an-email'. Report what you find.",
+  "max_turns": 120,
+  "required_urls": ["/checkout.html", "/receipt"],
+  "expected_defects": [
+    {
+      "id": "email-not-validated",
+      "page": "/checkout.html",
+      "description": "The email field is type=text and is never validated. 'not-an-email' is accepted and the form submits to the receipt page with no error.",
+      "patterns": [
+        "email.{0,70}(not |no |never |without |lacks? )?validat",
+        "invalid email.{0,70}(accept|submit|allow|proceed|through)",
+        "accept.{0,50}invalid email",
+        "no.{0,30}validation.{0,30}email"
+      ]
+    }
+  ],
+  "expected_facts": [
+    {
+      "id": "order-number",
+      "description": "The receipt shows order number ORD-90210",
+      "patterns": ["ORD-90210"],
+      "hallucination_check": {
+        "note": "Any other ORD-style number reported as the order number is a fabrication.",
+        "pattern": "\\bORD-\\d{4,6}\\b"
+      }
+    }
+  ],
+  "must_not_flag": []
+}

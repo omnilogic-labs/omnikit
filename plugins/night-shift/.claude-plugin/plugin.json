@@ -1,0 +1,9 @@
+{
+  "name": "night-shift",
+  "version": "0.4.0",
+  "description": "Run a board of work, or an already-written plan, unattended — or forge the plan itself. Ships a roster of small composable agents (orchestrator, delegate, planned-delegate, planner, plan-author, researcher, scout, verifier, fixer, integrator), five skills (task-triage, plan-queue, plan-forge, worktree-pipeline, task-tracking), and the /orchestrate, /drain, and /abort commands. All project specifics live in a .claude/night-shift.md adapter, so the package runs against any repo unchanged.",
+  "author": {
+    "name": "Omnilogic Labs",
+    "url": "https://github.com/omnilogic-labs"
+  }
+}

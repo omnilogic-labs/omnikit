@@ -1,0 +1,9 @@
+{
+  "name": "render",
+  "version": "0.1.0",
+  "description": "Work with Render.com: author render.yaml blueprints, SSH into services, understand the hosting model, and call the REST API.",
+  "author": {
+    "name": "Omnilogic Labs",
+    "url": "https://github.com/omnilogic-labs"
+  }
+}

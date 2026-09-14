@@ -1,0 +1,9 @@
+{
+  "name": "browser-buddy",
+  "version": "0.5.0",
+  "description": "Browser automation via Vercel's agent-browser CLI. Ships the agent-browser skill (snapshot-ref workflow, session hygiene, JPEG screenshots) and the browser-buddy agent: a sonnet-powered operator that takes a high-level browsing or testing task and returns a concise findings report.",
+  "author": {
+    "name": "Omnilogic Labs",
+    "url": "https://github.com/omnilogic-labs"
+  }
+}

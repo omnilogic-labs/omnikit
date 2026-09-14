@@ -1,0 +1,92 @@
+{
+  "id": "t1-sweep",
+  "title": "Whole-site sweep",
+  "prompt": "Browse the whole staging site at {{BASE}} starting from the index page. Exercise what you find and report anything that is broken or wrong. Cover every section linked from the index.",
+  "max_turns": 200,
+  "required_urls": [
+    "/",
+    "/clean.html",
+    "/console-error.html",
+    "/modal.html",
+    "/visual.html",
+    "/checkout.html",
+    "/links.html",
+    "/slow.html",
+    "/table.html"
+  ],
+  "expected_defects": [
+    {
+      "id": "inventory-500",
+      "page": "/console-error.html",
+      "description": "GET /api/inventory returns HTTP 500; console logs 'Inventory request failed with status 500'",
+      "patterns": ["/api/inventory", "inventory.{0,30}(500|fail)", "500.{0,30}inventory"]
+    },
+    {
+      "id": "price-typeerror",
+      "page": "/console-error.html",
+      "description": "Uncaught TypeError: Cannot read properties of null (reading 'price')",
+      "patterns": ["cannot read propert", "typeerror", "null.{0,20}price"]
+    },
+    {
+      "id": "link-404",
+      "page": "/links.html",
+      "description": "Warranty terms link points at /gone which returns a real 404",
+      "patterns": ["/gone", "warranty.{0,40}404", "404.{0,40}warranty"]
+    },
+    {
+      "id": "link-dead",
+      "page": "/links.html",
+      "description": "Support portal link is href=\"#\" and does nothing",
+      "patterns": ["support portal", "href=\"?#\"?", "placeholder link", "dead link"]
+    },
+    {
+      "id": "negative-price",
+      "page": "/table.html?page=3",
+      "description": "SKU-1027 / Component 27 has a negative unit price of -$14.00 on page 3",
+      "patterns": ["sku-1027", "component 27", "-\\$?14", "negative (unit )?price"]
+    },
+    {
+      "id": "invisible-button",
+      "page": "/visual.html",
+      "description": "Place order button renders white on white and is invisible",
+      "patterns": [
+        "place order.{0,60}(invisible|white|not visible|cannot be seen|unreadable)",
+        "(invisible|white on white).{0,60}place order"
+      ]
+    },
+    {
+      "id": "overlapping-banner",
+      "page": "/visual.html",
+      "description": "Promo banner is absolutely positioned over the summary and hides the Standard delivery line",
+      "patterns": [
+        "overlap",
+        "obscur",
+        "covers?.{0,40}(delivery|total)",
+        "banner.{0,40}(over|on top)"
+      ]
+    },
+    {
+      "id": "email-not-validated",
+      "page": "/checkout.html",
+      "description": "Checkout accepts a malformed email address and submits anyway, with no validation or error",
+      "patterns": [
+        "email.{0,60}(not |no |never |without )?valid",
+        "invalid email.{0,60}(accept|submit|allow)",
+        "accept.{0,40}invalid email"
+      ]
+    }
+  ],
+  "expected_facts": [],
+  "must_not_flag": [
+    {
+      "page": "/clean.html",
+      "description": "The contact form page is correct. Reporting a defect on it is a false positive.",
+      "patterns": ["contact"]
+    },
+    {
+      "page": "/slow.html",
+      "description": "The shipping status page is correct, only slow. Reporting it as blank or broken is a false positive caused by not waiting.",
+      "patterns": ["shipping status"]
+    }
+  ]
+}

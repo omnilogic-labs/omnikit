@@ -1,0 +1,244 @@
+#!/bin/bash
+# agent-browser: exec the workspace-vendored binary. Lives at the plugin root
+# so Claude Code puts it on PATH while the plugin is enabled, and so a
+# ~/.local/bin symlink survives bun re-creating node_modules.
+#
+# It also guards one silent footgun. Several subcommands take bare positionals
+# (`screenshot [selector] [path]`, for one), and the CLI accepts an unrecognized
+# flag as a positional rather than rejecting it. So `screenshot --full-page`
+# writes an image to a file literally named `--full-page` in the working
+# directory and reports success. Agents then repeat the guess forever, because
+# nothing ever tells them it was wrong. Observed filenames in the wild:
+# `--full-page`, `--format`, `--screenshot-format`, `--ref`, `-s`.
+#
+# The guard below rejects flag-shaped arguments the CLI's own help does not
+# document, so a mistyped flag becomes a loud error instead of a stray file.
+# It derives the valid set from `--help` at runtime, so it needs no maintenance
+# as the CLI changes, and it fails OPEN on anything it cannot determine — a
+# guard that blocks real work is worse than the litter it prevents.
+#
+# Escape hatch: AGENT_BROWSER_SKIP_FLAG_CHECK=1
+set -e
+
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+HERE="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+
+AB="$HERE/../node_modules/.bin/agent-browser"
+if [ ! -x "$AB" ]; then
+  # Hoisted layout fallback: walk up looking for node_modules/.bin/agent-browser.
+  DIR="$HERE"
+  while [ "$DIR" != "/" ]; do
+    if [ -x "$DIR/node_modules/.bin/agent-browser" ]; then
+      AB="$DIR/node_modules/.bin/agent-browser"
+      break
+    fi
+    DIR="$(dirname "$DIR")"
+  done
+fi
+
+if [ ! -x "$AB" ]; then
+  echo "agent-browser: vendored binary not found. Run 'bun install' at the omnikit repo root." >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Flag guard
+# ---------------------------------------------------------------------------
+
+# Cache parsed help per (binary mtime, subcommand) so the common path costs no
+# extra process spawns after the first call.
+_cache_dir="${TMPDIR:-/tmp}/agent-browser-flagcache-${UID:-0}"
+
+_help_flags() {
+  # Print every flag token documented in `$AB $1 --help` (empty $1 = top level).
+  local sub="$1" key stamp cache
+  stamp="$(stat -c %Y "$AB" 2> /dev/null || echo 0)"
+  key="${sub:-_root}"
+  cache="$_cache_dir/${stamp}.${key}"
+  if [ -r "$cache" ]; then
+    cat "$cache"
+    return 0
+  fi
+  local help
+  if [ -n "$sub" ]; then
+    help="$("$AB" "$sub" --help 2> /dev/null || true)"
+  else
+    help="$("$AB" --help 2> /dev/null || true)"
+  fi
+  [ -n "$help" ] || return 1
+  # Short flags come only from option *definition* lines — those that begin with
+  # a dash after indentation. Scraping single-letter tokens out of the whole help
+  # text would whitelist any `-x` merely mentioned in prose or an example, which
+  # is how `-s` (a snapshot flag) first slipped past this guard on `screenshot`.
+  local flags
+  flags="$(printf '%s\n' "$help" \
+    | grep -E '^[[:space:]]+-' \
+    | grep -oE '(^|[[:space:],(])--?[A-Za-z][A-Za-z0-9-]*' \
+    | sed -E 's/^[[:space:],(]//' \
+    | sort -u)"
+
+  # ...and definition lines were still not enough on their own, because the
+  # top-level help documents SUBCOMMAND options next to global ones. `-s,
+  # --selector <sel>` sits under `Snapshot Options:`; `-p`, `-v`, `-q` sit under
+  # a plain `Options:`. Since the guard allows root ∪ subcommand flags, every
+  # snapshot short flag was allowed on every subcommand — so `screenshot -s foo`
+  # passed, and the CLI swallowed `-s` as the selector positional and wrote a file
+  # named `-s`. That is the litter this guard exists to prevent, and it produced
+  # two of the observed filenames above.
+  #
+  # So at the root, keep long flags from any definition line (a wrong long flag is
+  # still caught by not being documented anywhere), but take SHORT flags only from
+  # the generic `Options:` block — the ones that really are global. A subcommand's
+  # own short flags still reach it through its own help: `snapshot --help` declares
+  # `-s`, so `snapshot -s main` is unaffected.
+  if [ -z "$sub" ]; then
+    local root_short
+    root_short="$(printf '%s\n' "$help" \
+      | awk '/^Options:[[:space:]]*$/ { inopt = 1; next }
+             /^[A-Za-z][A-Za-z0-9 \/-]*:[[:space:]]*$/ { inopt = 0 }
+             inopt' \
+      | grep -E '^[[:space:]]+-' \
+      | grep -oE '(^|[[:space:],(])--?[A-Za-z][A-Za-z0-9-]*' \
+      | sed -E 's/^[[:space:],(]//' \
+      | grep -E '^-[A-Za-z]$' \
+      | sort -u)"
+    # Drop every short flag, then add back only the global ones. If the `Options:`
+    # block could not be found, root_short is empty and all short flags fall away
+    # — strictly safe: a real global short flag then errors loudly instead of
+    # silently becoming a filename, and the message names the valid set.
+    flags="$(printf '%s\n%s\n' "$(printf '%s\n' "$flags" | grep -vE '^-[A-Za-z]$')" "$root_short" \
+      | sed '/^$/d' | sort -u)"
+  fi
+
+  # Long flags additionally come from anywhere in a *subcommand's* help, not just
+  # its dash-leading option lines. Real flags get declared on the `Usage:` line
+  # (`read [--llms <index|full>]`), on the signature lines of nested subcommands
+  # (`skills get <name> --full`, `state clear [--all]`, `state clean
+  # --older-than`), and in the Examples block only (`plugin run ... --payload`).
+  # Without this the guard rejects documented commands, including the
+  # `skills get core --full` that our own SKILL.md tells agents to run.
+  #
+  # Long-only, and scoped to subcommand help, for two separate reasons:
+  #   - Short flags stay restricted to definition lines, so a bare `-s` in prose
+  #     or an example can't be whitelisted for a subcommand that has no `-s`.
+  #   - Doing this to the top-level help would hoist every subcommand's flags
+  #     into the global set, so a `--tags` typo on `screenshot` would sail
+  #     through instead of being caught.
+  if [ -n "$sub" ]; then
+    local long
+    long="$(printf '%s\n' "$help" \
+      | grep -oE '(^|[[:space:],([])--[A-Za-z][A-Za-z0-9-]*' \
+      | sed -E 's/^[[:space:],([]//' \
+      | sort -u)"
+    flags="$(printf '%s\n%s\n' "$flags" "$long" | sed '/^$/d' | sort -u)"
+  fi
+  [ -n "$flags" ] || return 1
+  mkdir -p "$_cache_dir" 2> /dev/null || true
+  printf '%s\n' "$flags" > "$cache" 2> /dev/null || true
+  printf '%s\n' "$flags"
+}
+
+_subcommands() {
+  # Subcommand names come from two places in the top-level help, because it does
+  # not list them all the same way.
+  #
+  #   1. Indented bare words — the ordinary command list.
+  #   2. The word right after `agent-browser` in any usage or example line. Some
+  #      commands appear ONLY this way: `find` is introduced as
+  #      "Find Elements:  agent-browser find <locator> <value> <action>", so it
+  #      never shows up as an indented bare word.
+  #
+  # Pass 1 alone is actively wrong, not merely incomplete: it harvests `find`'s
+  # locator names (`role`, `text`, `label`, `first`, `nth`) as if they were
+  # commands. `find role button click --name Submit` then resolves to subcommand
+  # `role`, whose help is the top-level help, so `--name` looks invented and a
+  # documented command gets refused. With `find` present it matches first, in
+  # argument order, and the locator words are never reached.
+  {
+    "$AB" --help 2> /dev/null | grep -oE '^[[:space:]]+[a-z][a-z0-9-]*' | tr -d ' '
+    "$AB" --help 2> /dev/null | grep -oE 'agent-browser +[a-z][a-z0-9-]*' | awk '{print $2}'
+  } | sort -u || true
+}
+
+_flag_guard() {
+  [ -n "${AGENT_BROWSER_SKIP_FLAG_CHECK:-}" ] && return 0
+  [ "$#" -gt 0 ] || return 0
+
+  # Never interfere with a help or version request.
+  local a
+  for a in "$@"; do
+    case "$a" in --help | -h | --version | -V) return 0 ;; esac
+  done
+
+  local subs sub=""
+  subs="$(_subcommands)" || return 0
+  [ -n "$subs" ] || return 0
+  for a in "$@"; do
+    [ "$a" = "--" ] && break
+    case "$a" in -*) continue ;; esac
+    if printf '%s\n' "$subs" | grep -qxF -- "$a"; then
+      sub="$a"
+      break
+    fi
+  done
+  # No recognizable subcommand: not ours to judge.
+  [ -n "$sub" ] || return 0
+
+  local allowed root_flags sub_flags
+  root_flags="$(_help_flags "" || true)"
+  sub_flags="$(_help_flags "$sub" || true)"
+  allowed="$(printf '%s\n%s\n' "$root_flags" "$sub_flags" | sed '/^$/d' | sort -u)"
+  # Could not learn the valid set: fail open.
+  [ -n "$allowed" ] || return 0
+
+  local bad=() seen_ddash=0 tok
+  for tok in "$@"; do
+    if [ "$seen_ddash" = 1 ]; then continue; fi
+    if [ "$tok" = "--" ]; then
+      seen_ddash=1
+      continue
+    fi
+    # Only judge things that are unambiguously flag-shaped. A single-dash token
+    # must be one letter (so `-1`, `-100`, `-abc` are treated as values, not
+    # flags), and a double-dash token must start with a letter.
+    case "$tok" in
+      --[A-Za-z]*) ;;
+      -[A-Za-z]) ;;
+      *) continue ;;
+    esac
+    local name="${tok%%=*}"
+    printf '%s\n' "$allowed" | grep -qxF -- "$name" || bad+=("$name")
+  done
+
+  [ "${#bad[@]}" -eq 0 ] && return 0
+
+  {
+    echo "agent-browser: unknown flag for '$sub': ${bad[*]}"
+    echo
+    echo "Refusing to run. This CLI takes bare positionals on several subcommands"
+    echo "(e.g. 'screenshot [selector] [path]'), so an unrecognized flag would be"
+    echo "silently accepted as a positional — writing a file named '${bad[0]}' into"
+    echo "$PWD and reporting success."
+    echo
+    echo "Valid flags for '$sub':"
+    printf '%s\n' "$sub_flags" | sed '/^$/d' | sed 's/^/  /'
+    echo "Global:"
+    printf '%s\n' "$root_flags" | sed '/^$/d' | sed 's/^/  /'
+    echo
+    echo "Common mix-ups: --full (not --full-page) · --screenshot-format (not"
+    echo "--format) · -s and --ref belong to other subcommands, not screenshot."
+    echo "To write a screenshot somewhere specific, pass the path positionally:"
+    echo "  agent-browser screenshot ./shot.png"
+    echo "Set AGENT_BROWSER_SKIP_FLAG_CHECK=1 to bypass this check."
+  } >&2
+  exit 2
+}
+
+_flag_guard "$@"
+
+exec "$AB" "$@"

@@ -1,0 +1,14 @@
+{
+  "name": "night-shift",
+  "version": "0.4.0",
+  "description": "Composable agent roster, pipeline skills, and orchestration commands for unattended build runs. Prompt-only, no runtime dependencies.",
+  "private": true,
+  "author": {
+    "name": "Omnilogic Labs",
+    "url": "https://github.com/omnilogic-labs"
+  },
+  "license": "MIT",
+  "scripts": {
+    "format": "prettier --write ."
+  }
+}

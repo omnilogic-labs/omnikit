@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Booking reference lookup</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <h1>Booking reference lookup</h1>
+    <p>
+      Your collection booking is confirmed. Open the reference card below to see the code you need
+      to quote at the depot.
+    </p>
+
+    <button type="button" id="reveal">Show booking reference</button>
+
+    <p><a href="/">Back to index</a></p>
+
+    <script>
+      // The reference is assembled at click time and appended to the end of body
+      // as portal-style content, so it is absent from the initial DOM and hidden
+      // from the interactive-only snapshot filter. It can only be obtained by
+      // clicking, then taking a full snapshot or reading the text.
+      document.getElementById("reveal").addEventListener("click", function () {
+        if (document.getElementById("ref-dialog")) {
+          document.getElementById("ref-dialog").showModal();
+          return;
+        }
+        var code = ["ZX", "4417"].join("-");
+        var host = document.createElement("div");
+        host.id = "ref-portal";
+        var dialog = document.createElement("dialog");
+        dialog.id = "ref-dialog";
+
+        var heading = document.createElement("h2");
+        heading.textContent = "Collection reference";
+
+        var line = document.createElement("p");
+        line.id = "ref-value";
+        line.textContent = "Booking reference: " + code;
+
+        var note = document.createElement("p");
+        note.textContent = "Quote this code at the depot desk. It expires in 14 days.";
+
+        var close = document.createElement("button");
+        close.type = "button";
+        close.textContent = "Close";
+        close.addEventListener("click", function () {
+          dialog.close();
+        });
+
+        dialog.appendChild(heading);
+        dialog.appendChild(line);
+        dialog.appendChild(note);
+        dialog.appendChild(close);
+        host.appendChild(dialog);
+        document.body.appendChild(host);
+        dialog.showModal();
+      });
+    </script>
+  </body>
+</html>

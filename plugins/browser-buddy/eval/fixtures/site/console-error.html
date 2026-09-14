@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Titanium bracket, 12mm</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <h1>Titanium bracket, 12mm</h1>
+
+    <div class="card">
+      <p><strong>SKU-1042</strong></p>
+      <p>Price: <span>$34.00</span></p>
+      <p>Availability: <span id="stock">In stock</span></p>
+      <p>
+        Machined titanium bracket rated to 400kg. Sold individually. Ships from the Leeds warehouse
+        within two business days.
+      </p>
+      <button type="button" id="add">Add to basket</button>
+    </div>
+
+    <p><a href="/">Back to index</a></p>
+
+    <script>
+      // Planted defect 1: the inventory call fails with a 500 on every load.
+      // The page shows a hardcoded "In stock" regardless, so nothing looks wrong.
+      window.addEventListener("load", function () {
+        fetch("/api/inventory")
+          .then(function (response) {
+            if (!response.ok) {
+              console.error("Inventory request failed with status " + response.status);
+            }
+            return response.json();
+          })
+          .then(function (data) {
+            if (data && data.count != null) {
+              document.getElementById("stock").textContent = data.count + " in stock";
+            }
+          })
+          .catch(function (err) {
+            console.error("Inventory lookup rejected: " + err.message);
+          });
+      });
+
+      document.getElementById("add").addEventListener("click", function () {
+        console.log("add to basket clicked");
+      });
+    </script>
+    <script>
+      // Planted defect 2: an uncaught TypeError thrown shortly after load, when
+      // the page tries to refresh the price from an element that does not exist.
+      //
+      // Note for anyone reading results: as of agent-browser 0.32.1 the plain-text
+      // `errors` output renders each entry as a bare "✗" with no message. Only
+      // `errors --json` shows the exception text. Finding this defect therefore
+      // depends on the operator using --json, which the skill does recommend for
+      // read-style commands.
+      setTimeout(function () {
+        var priceSource = document.querySelector("#price-source");
+        document.getElementById("stock").dataset.price = priceSource.price;
+      }, 800);
+    </script>
+  </body>
+</html>

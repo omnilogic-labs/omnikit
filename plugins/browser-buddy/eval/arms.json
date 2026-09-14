@@ -1,0 +1,23 @@
+[
+  {
+    "id": "haiku",
+    "label": "Haiku 4.5",
+    "model": "claude-haiku-4-5",
+    "effort": null,
+    "note": "Haiku 4.5 does not support effort levels, so no --effort flag is passed. This is the closest available arm to 'no reasoning'."
+  },
+  {
+    "id": "sonnet-low",
+    "label": "Sonnet 5, effort low",
+    "model": "claude-sonnet-5",
+    "effort": "low",
+    "note": "Verified to emit no thinking blocks, so this is Sonnet with reasoning effectively off."
+  },
+  {
+    "id": "sonnet-med",
+    "label": "Sonnet 5, effort medium (baseline)",
+    "model": "claude-sonnet-5",
+    "effort": "medium",
+    "note": "The configuration currently shipped in agents/browser-buddy.md. Reference point for every comparison."
+  }
+]

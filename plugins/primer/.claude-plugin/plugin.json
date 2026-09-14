@@ -1,0 +1,9 @@
+{
+  "name": "primer",
+  "version": "0.1.0",
+  "description": "Turn a vague product idea into a primer build-brief, decompose it into idempotent task files, and execute the build with a dynamic Workflow runner (parallel where safe) instead of a hand-written claude -p loop.",
+  "author": {
+    "name": "Omnilogic Labs",
+    "url": "https://github.com/omnilogic-labs"
+  }
+}

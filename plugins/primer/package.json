@@ -1,0 +1,11 @@
+{
+  "name": "primer",
+  "version": "0.1.0",
+  "description": "Primer skill: vague idea to primer build-brief to dynamic Workflow build runner. Prompt-only, no runtime dependencies.",
+  "private": true,
+  "author": {
+    "name": "Omnilogic Labs",
+    "url": "https://github.com/omnilogic-labs"
+  },
+  "license": "MIT"
+}

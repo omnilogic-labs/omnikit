@@ -1,0 +1,29 @@
+{
+  "name": "omnikit",
+  "version": "1.0.0",
+  "description": "Cross-platform agent skills for Claude Code, Codex CLI, and Gemini CLI.",
+  "private": true,
+  "workspaces": [
+    "plugins/*"
+  ],
+  "packageManager": "bun@1.3.5",
+  "author": {
+    "name": "Omnilogic Labs",
+    "url": "https://github.com/omnilogic-labs"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omnilogic-labs/omnikit"
+  },
+  "scripts": {
+    "link": "bash install.sh",
+    "link:check": "bash install.sh --dry-run --no-deps",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.8.2",
+    "prettier-plugin-sh": "^0.18.1"
+  }
+}

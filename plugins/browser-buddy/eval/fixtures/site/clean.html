@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Contact us</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <h1>Contact us</h1>
+    <p>Send us a note and we will reply within one business day.</p>
+
+    <form id="contact-form" novalidate>
+      <label for="name">Your name</label>
+      <input id="name" name="name" type="text" autocomplete="name" />
+
+      <label for="email">Email address</label>
+      <input id="email" name="email" type="email" autocomplete="email" />
+
+      <label for="topic">Topic</label>
+      <select id="topic" name="topic">
+        <option value="sales">Sales</option>
+        <option value="support">Support</option>
+        <option value="billing">Billing</option>
+      </select>
+
+      <label for="message">Message</label>
+      <textarea id="message" name="message" rows="4"></textarea>
+
+      <button type="submit">Send message</button>
+    </form>
+
+    <div id="result" hidden class="confirm"></div>
+
+    <p><a href="/">Back to index</a></p>
+
+    <script>
+      // Negative control: this page is correct on purpose.
+      // Validation works, submission works, and nothing is written to the console.
+      document.getElementById("contact-form").addEventListener("submit", function (event) {
+        event.preventDefault();
+        var name = document.getElementById("name");
+        var email = document.getElementById("email");
+        var message = document.getElementById("message");
+        var problems = [];
+
+        if (!name.value.trim()) problems.push("Please enter your name.");
+        if (!email.value.trim()) problems.push("Please enter your email address.");
+        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim()))
+          problems.push("Please enter a valid email address.");
+        if (!message.value.trim()) problems.push("Please enter a message.");
+
+        var result = document.getElementById("result");
+        result.hidden = false;
+        if (problems.length) {
+          result.className = "confirm";
+          result.style.background = "#fdeeee";
+          result.style.borderColor = "#e0b4b4";
+          result.textContent = problems.join(" ");
+          return;
+        }
+        result.style.background = "";
+        result.style.borderColor = "";
+        result.textContent = "Thanks, " + name.value.trim() + ". Your message has been sent.";
+        document.getElementById("contact-form").reset();
+      });
+    </script>
+  </body>
+</html>
