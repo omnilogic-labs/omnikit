@@ -7,7 +7,8 @@ description: >-
   commit message. Does not re-grade its own fix and does not expand scope
   beyond the failed criteria.
 model: fable
-effort: high
+effort: medium
+metadata: { night_shift_tier: 1, reasoning: medium }
 memory: project
 ---
 

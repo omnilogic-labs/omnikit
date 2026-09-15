@@ -31,7 +31,7 @@ When a subagent roster is available, dispatch `night-shift-scout` for the readin
 
 **Splitting the board across several scouts is normal, and `board-scan.sh` has already done the split.** Each `SLICE` line in its manifest names one file and the issues inside it; hand one path to one scout. Do not let scouts choose their own filenames: the session scratchpad is shared by every agent in the run, so five agents left to name their own output all reach for `scratchpad/issues.txt` and overwrite each other. A scout reading back a file full of issue numbers it never asked for is that collision.
 
-**Without a subagent roster** (Codex, Gemini), run the same procedure in one context, with two adjustments: read in batches and write each batch's buckets into the digest before reading the next; and drop the concurrency cap to 1 for whatever runs after, since one context cannot supervise parallel lanes.
+**Without a subagent roster**, run the same procedure in one context, with two adjustments: read in batches and write each batch's buckets into the digest before reading the next; and drop the concurrency cap to 1 for whatever runs after, since one context cannot supervise parallel lanes. Codex installations that expose agent delegation have a roster; resolve the scout from `roles.yaml` before dispatching it.
 
 ### The scratch file is the handoff, not the scout's return value
 

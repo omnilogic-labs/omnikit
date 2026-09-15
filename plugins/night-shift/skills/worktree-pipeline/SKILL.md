@@ -7,11 +7,11 @@ description: Run a queue of disjoint units of work through isolated git worktree
 
 Takes a queue of disjoint units and runs them through isolated worktrees to a landed commit. This skill knows which agent handles which stage; the agents know nothing about the pipeline.
 
-Everything project-specific comes from the adapter at `.claude/night-shift.md`. See `references/adapter.md` for the spec, `references/example-adapter.md` for a filled-in one, and `references/models-and-effort.md` for how model class and reasoning level resolve. This skill calls hooks by name and never contains a literal project command.
+Everything project-specific comes from the adapter at `.claude/night-shift.md`. See `references/adapter.md` for the spec, `references/example-adapter.md` for a filled-in one, `roles.yaml` for the portable tier-to-provider mapping, and `references/models-and-effort.md` for resolution. On Codex with agent delegation, read `references/codex-roster.md` before the first dispatch. This skill calls hooks by name and never contains a literal project command.
 
 ## Before the first dispatch
 
-- **Nested spawning must be on.** By default Claude Code withholds the `Agent` tool from subagents, so a delegate cannot dispatch its planner, verifier, or fixer. Set `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` to at least `3` in settings.json. If it is off, stop and say so rather than dispatching delegates that will silently do everything themselves.
+- **Confirm nested spawning for the active harness.** Claude Code needs `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` at least `3`. Codex needs agent delegation available. If the required depth is unavailable, use the no-roster procedure rather than dispatching delegates that will silently do everything themselves.
 - **Run the adapter's `preflight` hook.** Fix or report what it flags. A pipeline started against a broken environment produces failures that look like bad code.
 - **Confirm the queue is actually disjoint.** Overlapping units are not a parallelism problem to solve later; they are a serialization decision to make now.
 
@@ -119,11 +119,11 @@ A brief that grows past the contract plus a scope boundary is usually the orches
 Log every dispatch with its model and reasoning level, so a bad result traces to a downgrade:
 
 ```
-#126 delegate model=opus effort=high lane=2 worktree=/w/issue-126 port=4102
+#126 delegate tier=2 model=gpt-5.6-sol reasoning=high lane=2 worktree=/w/issue-126 port=4102
 ```
 
-Model overrides apply at dispatch; reasoning overrides do not, and a role overridden down to haiku logs `effort=n/a`. Never log a level that did not take effect. This is a log, not a subject to raise with the user — mention the dispatch-time effort limit only if they asked for a level you could not apply. Full rules in `references/models-and-effort.md`.
+Resolve the role's portable tier through `roles.yaml`, then log the provider model and reasoning that actually ran. Never log a level that did not take effect. Full rules are in `references/models-and-effort.md`.
 
 ## Without a subagent roster
 
-If the harness has no agents — Codex, Gemini — read `references/without-subagents.md`: the same procedure runs in one context, at a cap of 1. Do not read it when a subagent roster is available.
+If the active harness has no agent delegation, read `references/without-subagents.md`: the same procedure runs in one context, at a cap of 1. Do not read it when a subagent roster is available.

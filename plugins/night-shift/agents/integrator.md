@@ -8,6 +8,7 @@ description: >-
   Escalates conflicts rather than resolving them. Never pushes.
 model: sonnet
 effort: medium
+metadata: { night_shift_tier: 3, reasoning: medium }
 tools: Agent, Bash, Read, Grep, Glob, Skill
 ---
 

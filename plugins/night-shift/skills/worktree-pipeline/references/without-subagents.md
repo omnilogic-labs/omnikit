@@ -1,7 +1,8 @@
 # Running the pipeline without a subagent roster
 
-Read this only when the harness has no agents to dispatch — Codex, Gemini, or any
-runner without a subagent tool. With a roster available, the skill body applies as
+Read this only when the harness has no agents to dispatch. Codex installations that expose
+agent delegation use the roster in `../../roles.yaml`; Gemini and any runner without a
+subagent tool use this fallback. With a roster available, the skill body applies as
 written and this file does not.
 
 This is a real fallback, not a stub. The procedure is the same; three things change.

@@ -8,6 +8,7 @@ description: >-
   Returns PASS or FAIL with reasons tied to specific criteria. Never fixes.
 model: sonnet
 effort: medium
+metadata: { night_shift_tier: 3, reasoning: medium }
 tools: Agent, Bash, Read, Grep, Glob, Skill, WebFetch
 ---
 

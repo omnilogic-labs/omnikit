@@ -55,15 +55,15 @@ Record the transition, not the story. "returned-green, a1b2c3d" is the entry; th
 Every dispatch line records both, because a bad result usually traces to a downgrade:
 
 ```
-#126 planner    model=fable  effort=high
-#126 delegate   model=opus   effort=high
-#126 scout      model=sonnet effort=medium
-#126 integrator model=opus   effort=high   (model override applied)
+#126 planner    tier=1 model=gpt-6-astra  reasoning=medium
+#126 delegate   tier=2 model=gpt-5.6-sol  reasoning=high
+#126 scout      tier=3 model=gpt-5.6-terra reasoning=medium
+#126 integrator tier=3 model=sonnet       reasoning=medium
 ```
 
 Record what actually ran, never what was asked for.
 
-These are log lines, not talking points. Effort is worth a sentence to the user in exactly one case: they asked for a level that could not be applied, in which case say so once and move on. Otherwise write the level down and say nothing about it — an unprompted note explaining that reasoning cannot be set at dispatch is a non-event reported as a defect. The resolution rules are in the worktree-pipeline skill's `references/models-and-effort.md`.
+These are log lines, not talking points. Reasoning is worth a sentence to the user only if they asked for a level that the active harness cannot apply. Otherwise write the level down and say nothing about it. The resolution rules are in the worktree-pipeline skill's `references/models-and-effort.md`.
 
 ## Answering the status question
 
@@ -86,4 +86,4 @@ Worth writing to a ticket instead of here: an ordering constraint ("do not land 
 
 ## Without the task tools
 
-If a `TaskCreate` call errors with "not enabled in this context" — background subagents, Codex, Gemini — read `references/without-task-tools.md` and track the same list by hand. Do not read it otherwise: in a foreground session the tools are there and the fallback does not apply.
+If a task-list call errors with "not enabled in this context", read `references/without-task-tools.md` and track the same list by hand. Do not infer that Codex lacks task tools: check the active harness first.

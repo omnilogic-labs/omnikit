@@ -8,7 +8,7 @@ Claude Code session they are available, and this file does not apply.
 - **Background subagents** keep a reduced built-in tool set, and the task tools are not
   in it. A `TaskCreate` or `TaskList` call there errors with "not enabled in this
   context".
-- **Codex and Gemini** have no task list at all.
+- **Some Codex and Gemini hosts** have no task list. Check the active harness rather than inferring this from its provider.
 
 ## What to do instead
 

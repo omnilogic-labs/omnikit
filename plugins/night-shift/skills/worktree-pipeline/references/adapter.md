@@ -39,7 +39,7 @@ The test of whether the split is right: all three skills run against a repo that
 | `hooks.start`      | string                               | none                            | Starts the dev server. Must honor the assigned port.                                                                                     |
 | `hooks.serving`    | string                               | none                            | Reports who currently holds a unit's port, and what to signal to stop it.                                                                |
 | `hooks.sweep`      | string                               | none                            | Stops everything a unit left running in its own worktree, and verifies it stopped.                                                       |
-| `overrides`        | map                                  | none                            | Per-role model and reasoning overrides. See below.                                                                                       |
+| `overrides`        | map                                  | none                            | Per-role capability-tier and reasoning overrides. See below.                                                                            |
 | `references`       | list of paths                        | none                            | Read-only prior art an agent may consult.                                                                                                |
 | `prior_art`        | boolean                              | `true` when `references` is set | Turns the planner's prior art mode on or off.                                                                                            |
 | `design_reference` | path                                 | none                            | What visual criteria are graded against.                                                                                                 |
@@ -72,8 +72,8 @@ hooks:
   start: bun run start
 
 overrides:
-  scout: { model: sonnet }
-  verifier: { model: sonnet, effort: medium }
+  scout: { tier: 3, reasoning: medium }
+  verifier: { tier: 3, reasoning: medium }
 
 references:
   - ../reference-app-one
@@ -122,20 +122,24 @@ If your `integrate` hook appends its own closing trailer (deriving the issue num
 
 ```yaml
 overrides:
-  scout: { model: sonnet }
-  planner: { model: opus }
+  scout: { tier: 3, reasoning: medium }
+  planner: { tier: 2, reasoning: high }
 ```
 
 This map is read when the adapter is read, at the top of the run, and applies to every dispatch from then on, including the triage reading pass, which fires before this skill is ever loaded.
 
-Both values resolve independently, first match wins:
+Use portable values in this map:
 
-1. an explicit model passed at dispatch (including flags to the foreground orchestrator command, `/orchestrate` by default and aliased in some repos)
-2. this override map
-3. the agent definition frontmatter
-4. the class default for reasoning level (`fable` and `opus` high, `sonnet` medium; `haiku` has none)
+```yaml
+overrides:
+  scout: { tier: 3, reasoning: medium }
+  planner: { tier: 2, reasoning: high }
+```
 
-One caveat worth knowing when writing this map: a model override applies at dispatch, but a reasoning override cannot (there is no dispatch-time effort parameter, and haiku takes no effort at all), so an `effort` set here only documents intent until it is edited into the agent definition or the session level. The full rules are in `models-and-effort.md` next to this file.
+The active harness resolves `tier` through Night Shift's `roles.yaml`: Fable/Astra for tier
+1, Opus/Sol for tier 2, Sonnet/Terra for tier 3, and Haiku/Luna for tier 4. A provider model
+explicitly passed at dispatch wins. See `models-and-effort.md` next to this file for the full
+resolution order and the tier-4 reasoning limitation.
 
 ## The body
 

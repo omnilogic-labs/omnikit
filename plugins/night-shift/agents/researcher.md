@@ -8,6 +8,7 @@ description: >-
   Delegates bulk reading to the scout so the corpus never enters its context.
 model: opus
 effort: high
+metadata: { night_shift_tier: 2, reasoning: high }
 tools: Agent, Bash, Read, Grep, Glob, Skill, WebFetch, WebSearch
 ---
 

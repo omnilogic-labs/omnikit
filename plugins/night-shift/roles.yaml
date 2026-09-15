@@ -1,0 +1,29 @@
+schema_version: 1
+# Provider names are resolver outputs, never values that portable skills or
+# project adapters need to contain.
+tiers:
+  1:
+    claude: { model: fable, effort: medium }
+    codex: { model: gpt-6-astra, reasoning_effort: medium }
+  2:
+    claude: { model: opus, effort: high }
+    codex: { model: gpt-5.6-sol, reasoning_effort: high }
+  3:
+    claude: { model: sonnet, effort: medium }
+    codex: { model: gpt-5.6-terra, reasoning_effort: medium }
+  4:
+    claude: { model: haiku, effort: null }
+    codex: { model: gpt-5.6-luna, reasoning_effort: medium }
+
+roles:
+  orchestrator: { tier: 2 }
+  delegate: { tier: 2 }
+  planned-delegate: { tier: 2 }
+  planner: { tier: 1 }
+  plan-author: { tier: 1 }
+  researcher: { tier: 2 }
+  scout: { tier: 3 }
+  verifier: { tier: 3 }
+  fixer: { tier: 1 }
+  integrator: { tier: 3 }
+  browser-buddy: { tier: 3 }

@@ -8,6 +8,7 @@ description: >-
   carry the corpus. Returns EXTRACT or POINTERS, never conclusions.
 model: sonnet
 effort: medium
+metadata: { night_shift_tier: 3, reasoning: medium }
 tools: Read, Grep, Glob, Bash, WebFetch, WebSearch
 ---
 

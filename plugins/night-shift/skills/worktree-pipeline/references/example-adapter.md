@@ -36,7 +36,7 @@ hooks:
   start: bun run start
 
 overrides:
-  scout: { model: sonnet }
+  scout: { tier: 3, reasoning: medium }
 
 references:
   - ${PLANNING_ROOT}/legacy-app-one

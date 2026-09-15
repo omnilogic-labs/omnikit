@@ -53,7 +53,7 @@ this skill's whole value is that none of it reaches the caller.
 first dispatch of a run and the one most often sent at a default model the adapter meant to
 raise. Read `overrides` before dispatching, not after.
 
-**Without a subagent roster** (Codex, Gemini, or any harness without agents), run the same
+**Without a subagent roster** (any harness without agents), run the same
 procedure in one context, reading in batches and writing each batch into the digest before the
 next. Drop the concurrency cap to 1 for whatever runs after this.
 

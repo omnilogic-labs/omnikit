@@ -9,7 +9,8 @@ description: >-
   plus any corrections to the source material it found while verifying.
   Writes only inside the plan folder and the run's scratch directory.
 model: fable
-effort: high
+effort: medium
+metadata: { night_shift_tier: 1, reasoning: medium }
 tools: Read, Grep, Glob, Bash, Write
 ---
 

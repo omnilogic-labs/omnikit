@@ -61,18 +61,18 @@ Both print the same closing summary shape, so the difference between them is wha
 
 ## The roster
 
-| Agent                          | Model  | Effort | One line                                         |
-| ------------------------------ | ------ | ------ | ------------------------------------------------ |
-| `night-shift-orchestrator`     | opus   | high   | holds the board, dispatches, never does the work |
-| `night-shift-delegate`         | opus   | high   | owns one unit of work end to end                 |
-| `night-shift-planned-delegate` | opus   | high   | owns one step of an already-written plan         |
-| `night-shift-planner`          | fable  | high   | approach plus acceptance criteria                |
-| `night-shift-plan-author`      | fable  | high   | writes a batch of step files for a forged plan   |
-| `night-shift-researcher`       | opus   | high   | answers a question, read only                    |
-| `night-shift-scout`            | sonnet | medium | bulk reading, returns extracts or pointers       |
-| `night-shift-verifier`         | sonnet | medium | grades a change against the criteria             |
-| `night-shift-fixer`            | fable  | high   | fixes a failed change against the criteria       |
-| `night-shift-integrator`       | sonnet | medium | writes the squash message and lands the branch   |
+| Agent                          | Tier | Claude / Codex | Reasoning | One line                                         |
+| ------------------------------ | ---- | -------------- | --------- | ------------------------------------------------ |
+| `night-shift-orchestrator`     | 2 | Opus / Sol | high | holds the board, dispatches, never does the work |
+| `night-shift-delegate`         | 2 | Opus / Sol | high | owns one unit of work end to end                 |
+| `night-shift-planned-delegate` | 2 | Opus / Sol | high | owns one step of an already-written plan         |
+| `night-shift-planner`          | 1 | Fable / Astra | medium | approach plus acceptance criteria                |
+| `night-shift-plan-author`      | 1 | Fable / Astra | medium | writes a batch of step files for a forged plan   |
+| `night-shift-researcher`       | 2 | Opus / Sol | high | answers a question, read only                    |
+| `night-shift-scout`            | 3 | Sonnet / Terra | medium | bulk reading, returns extracts or pointers       |
+| `night-shift-verifier`         | 3 | Sonnet / Terra | medium | grades a change against the criteria             |
+| `night-shift-fixer`            | 1 | Fable / Astra | medium | fixes a failed change against the criteria       |
+| `night-shift-integrator`       | 3 | Sonnet / Terra | medium | writes the squash message and lands the branch   |
 
 Every agent is usable on its own. Ask the researcher a question, hand the planner a goal, point the scout at a log. The pipeline is one way to compose them, not the only one.
 
@@ -92,17 +92,16 @@ Names are prefixed because the pipeline dispatches by name and `planner` or `sco
 - **`worktree-pipeline`** runs a queue of disjoint units through isolated worktrees: provision, dispatch, route, integrate one at a time, publish, tear down. Holds the concurrency rules and the contract every dispatched agent receives.
 - **`task-tracking`** keeps the run's list in the built-in task list, one entry per unit with state, lane, and the model and effort of each dispatch. Files nothing to GitHub, on purpose.
 
-Skills work in Codex and Gemini too. Agents and commands are Claude Code only, so both pipeline skills state what to do with no roster available: same procedure in one context, concurrency cap dropped to 1, with a warning that context fills faster. It is a real fallback, not a stub.
+Skills work in Codex and Gemini too. Claude Code loads the agent definitions directly. Codex installations with agent delegation resolve the same roles through `roles.yaml` and `skills/worktree-pipeline/references/codex-roster.md`. A harness without a roster runs the same procedure in one context, with concurrency capped at 1. It is a real fallback, not a stub.
 
-## Model classes and reasoning levels
+## Capability tiers and reasoning
 
-Four classes, in order of capability: `fable`, `opus`, `sonnet`, `haiku`. Fable and opus at high do judgment that is expensive to get wrong: planning, fixing, owning a unit. The token-heavy jobs sit at sonnet medium: grading, bulk reading, and integrating, where the lever is a reading or return cap rather than a reasoning level. Any agent about to read a large corpus delegates that read to the scout, so expensive models spend context on judgment rather than on files.
+Four portable tiers map to Fable/Astra, Opus/Sol, Sonnet/Terra, and Haiku/Luna. The models are not equivalent, but the tiers preserve the roster's operating choice across providers. Tier 1 uses Fable and Astra at medium; Tier 2 uses Opus and Sol at high; Tier 3 uses Sonnet and Terra at medium. Any agent about to read a large corpus delegates that reading to the scout, so expensive roles spend context on judgment rather than files.
 
-Nothing ships on haiku. It stays in the class list as an override target, but sonnet at medium is the floor for every role: measured on a browser-operation suite with a known answer key, haiku cost the same per task as sonnet at low while taking three times the turns to get there, and was the only class that cited evidence it had never actually fetched. The suite is in `plugins/browser-buddy/eval/`.
+No shipped role uses Tier 4. Haiku has no reasoning control; Luna stays an explicit, low-risk Codex override rather than a default for unattended work.
 
-Model and reasoning level resolve independently, first match wins: dispatch-time model, then the adapter's override map, then the agent frontmatter, then the class default. `effort` is settable only in agent or command frontmatter, never at dispatch, and haiku takes no effort at all. The full rules, the dispatch-record convention, and the cost basis live in `skills/worktree-pipeline/references/models-and-effort.md`.
+The full mapping, resolution rules, and dispatch record live in `skills/worktree-pipeline/references/models-and-effort.md` and `roles.yaml`.
 
-**No agent runs at `low`.** Medium is the floor. Low scopes a model to exactly what was asked and makes it stop to ask rather than push through multi-step work, which is the opposite of what an unattended run needs. If a job feels cheap enough to want low, use a cheaper model at medium.
 
 ## Harness notes
 

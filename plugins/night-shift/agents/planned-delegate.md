@@ -10,6 +10,7 @@ description: >-
   Returns a branch, a SHA, the acceptance criteria, and GREEN or BLOCKED.
 model: opus
 effort: high
+metadata: { night_shift_tier: 2, reasoning: high }
 memory: project
 ---
 

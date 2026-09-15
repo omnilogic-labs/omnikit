@@ -1,78 +1,73 @@
-# Models and reasoning levels
+# Capability tiers and reasoning
 
-The canonical reference for how the night-shift roster resolves model class and reasoning level (`effort`). Agent definitions, skills, and the README point here instead of restating it.
+This is the canonical Night Shift policy for choosing a role's capability tier and
+reasoning level. The provider-specific model mapping lives in
+[`../../../roles.yaml`](../../../roles.yaml). Skills and project adapters use the
+portable tier, never a provider model name.
 
-## Model classes
+## Tiers
 
-Four classes, in order of capability: `fable`, `opus`, `sonnet`, `haiku`. The roster pins judgment-heavy roles (planner, fixer, delegate, orchestrator, researcher) on fable or opus at high, and everything else (grading, bulk reading, integration) on sonnet at medium. Nothing ships on haiku; it remains available as an override target. Any agent about to read a large corpus delegates the read to the scout, so expensive models spend context on judgment rather than on files.
+| Tier | Claude | Codex | Default reasoning | Intended work |
+| ---- | ------ | ----- | ----------------- | ------------- |
+| 1 | Fable | Astra | medium | Planning or fixing errors that amplify through a run |
+| 2 | Opus | Sol | high | Owning a unit, orchestration, and research judgment |
+| 3 | Sonnet | Terra | medium | Bounded reading, grading, and integration |
+| 4 | Haiku | Luna | medium on Codex, unavailable on Haiku | Explicit low-risk overrides only |
 
-Sonnet at medium is the floor for every role because the cheap tier did not turn out to be cheap. Measured on a browser-operation suite with planted defects and a known answer key, Haiku 4.5 cost the same per task as Sonnet at low ($0.188 against $0.185) while taking three times the turns and eight times the failed tool calls to get there, and it was the only class that fabricated evidence: it cited URLs it had never requested. A model that needs three times the steps gives back at the turn count whatever it saves on the per-token rate, and bulk reading is exactly where invented content is hardest to catch. The harness that produced those numbers is in `plugins/browser-buddy/eval/`.
+The providers' models are not claimed to be equivalent. A tier expresses the operating
+choice for this roster: which jobs deserve the highest judgment, primary ownership,
+bounded execution, or a deliberately cheap override. Change the provider mapping in one
+place when model availability changes.
 
-## Where a reasoning level can be set
+No shipped Night Shift role uses tier 4. Haiku has no reasoning control, so a tier-4
+dispatch cannot preserve the common reasoning contract. Luna may be used for an explicit
+low-risk Codex override at medium reasoning, but it is not a default for unattended work.
 
-`effort` accepts `low`, `medium`, `high`, `xhigh`, or `max`, in exactly two places:
+## Shipped role allocation
 
-- **Agent definition frontmatter**, which is where this roster pins its levels. It overrides the session effort.
-- **Slash-command frontmatter**, which is how the run, drain, and halt commands pin the foreground level for their turn.
+- Tier 1, high: planner, plan-author, fixer.
+- Tier 2, high: orchestrator, delegate, planned-delegate, researcher.
+- Tier 3, medium: scout, verifier, integrator, browser-buddy.
 
-It is **not** a dispatch-time parameter. The `Agent` tool takes `model`, `subagent_type`, `isolation`, and `run_in_background`, and no effort. A reasoning override therefore has to be edited into the agent definition before the run, or set as the session effort level; both are the user's call. When a run cannot apply a requested level, it logs `effort=<X> REQUESTED, NOT APPLIED (no dispatch-time effort lever); ran at <Y> from frontmatter` rather than recording a level that never took effect. Model is the lever that works at dispatch; reach for it first.
+Any agent about to read a large corpus delegates that reading to the scout. Expensive roles
+spend their context on judgment, not on files they will read once.
 
-(Workflow scripts are the one exception: `agent(prompt, {effort})` is a real per-call option there, but that is the workflow runner, not the `Agent` tool.)
+## Adapter overrides
 
-## Resolution order
+Adapters override a role with portable values:
 
-Model and reasoning level resolve independently, first match wins:
-
-1. an explicit model passed at dispatch (including flags to the foreground orchestrator command)
-2. the adapter's `overrides` map, read once at the top of the run
-3. the agent definition frontmatter
-4. the class default for reasoning level: fable and opus high, sonnet medium; haiku has none
-
-Overriding a model does not carry a reasoning level with it. Dropping an agent to haiku does not lower its level so much as remove the control, which is one of the reasons no role ships there.
-
-## Haiku takes no reasoning level
-
-Haiku 4.5 does not take the `effort` parameter at all. No role ships on haiku, so this only matters when an adapter or a dispatch overrides one down to it: the override does not lower that role's reasoning level, it removes the control, and the dispatch record should log `effort=n/a` rather than carrying the frontmatter level forward.
-
-## No role runs at low
-
-Medium is the floor. Low scopes a model to exactly what was asked and makes it stop to ask rather than push through multi-step work, which is the opposite of what an unattended run needs. If a job feels cheap enough to want low, use a cheaper model at medium.
-
-## The dispatch record
-
-Every dispatch is logged with model and reasoning level together, so a bad result traces to a downgrade:
-
-```
-#126 planner  model=fable  effort=high     (frontmatter)
-#126 delegate model=opus   effort=high     (frontmatter)
-#126 scout    model=sonnet effort=medium   (frontmatter)
-#126 integrator model=opus effort=high     (model override applied; level from override class default)
-#126 verifier effort=high REQUESTED, NOT APPLIED (no dispatch-time effort lever); ran at medium
+```yaml
+overrides:
+  scout: { tier: 3, reasoning: medium }
+  planner: { tier: 2, reasoning: high }
 ```
 
-Record what actually happened, never what was asked for.
+`tier` selects the active provider's model through `roles.yaml`. `reasoning` expresses the
+requested level. A provider-specific `model` or `effort` may remain in a Claude-only
+adapter for compatibility, but it is not portable and must not be introduced in new shared
+configuration.
 
-## When to say any of this to the user
+Resolve independently, first value wins:
 
-Almost never. The dispatch record is a log; this file is a reference for decisions that
-turn on it. Neither is a script to read aloud.
+1. a provider-specific model explicitly passed at dispatch
+2. a portable adapter `tier`, then its optional `reasoning`
+3. the role's portable tier in `roles.yaml`
+4. the active provider's model and default reasoning for that tier
 
-There is one trigger, and it is narrow: **the user asked for a reasoning level that
-could not be applied.** Then say it once — what they asked for, what ran instead, and
-that model is the lever that works at dispatch — and carry on.
+The active harness determines whether it can apply a reasoning value at dispatch. Claude
+pins it in agent or command frontmatter. Codex supplies it when creating an agent. Log what
+actually ran, never the requested value alone.
 
-Absent that request, a run that volunteers "reasoning cannot be overridden at dispatch"
-is reporting a non-event as though it were a defect. Nobody asked, nothing failed, and
-every run says it, so it reads as the tooling apologizing for itself on a fixed
-schedule. Log the level that ran and move on.
+## Dispatch record
 
-## Cost basis
+Every dispatch records tier, provider model, and reasoning together:
 
-The roster spans roughly 10x in per-token price from haiku to the top class, and reasoning
-level multiplies on top of it, because thinking tokens bill as output. That is the whole of
-what a dispatch decision needs: a cheap model at a high level is not obviously cheaper than
-an expensive one at a low level, so pick the class for the job and the level for the
-difficulty, and do not treat either as free.
+```
+#126 planner  tier=1 model=gpt-6-astra   reasoning=medium  (role default)
+#126 delegate tier=2 model=opus          reasoning=high    (Claude mapping)
+#126 scout    tier=3 model=gpt-5.6-terra  reasoning=medium  (adapter tier)
+#126 verifier tier=4 model=gpt-5.6-luna   reasoning=medium  (explicit override)
+```
 
-Live prices belong on the vendor's pricing page, not in this file — a table here is wrong
-within weeks and gets quoted with confidence anyway.
+These are log lines, not user-facing status. Mention a requested level only when the user
+asked for it and the active harness could not apply it.

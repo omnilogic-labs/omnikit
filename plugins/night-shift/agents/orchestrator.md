@@ -10,6 +10,7 @@ description: >-
   runs this same role in the foreground where the task tools exist.
 model: opus
 effort: high
+metadata: { night_shift_tier: 2, reasoning: high }
 ---
 
 # night-shift orchestrator
@@ -105,7 +106,7 @@ These are log lines, not talking points:
 
 - Model overrides apply at dispatch (the `Agent` tool takes `model`). Log them as applied.
 - Reasoning overrides do not — there is no dispatch-time effort parameter. An agent runs at the `effort` its definition pins, or inherits the session level. **This is the normal case and needs no comment.**
-- No role ships on haiku; if one is overridden down to it, log `effort=n/a`. No role runs at `low` — if a job feels that cheap, use a cheaper model at medium.
+- No role ships on tier 4. If a Claude role is overridden to Haiku, log `effort=n/a`; if a Codex role is overridden to Luna, use medium reasoning. Tier 1 defaults to medium on both providers, and higher reasoning is an explicit escalation.
 
 **Mention the effort mechanism only if the user asked for a level you could not apply.** Then it is one line, once: `effort=<X> REQUESTED, NOT APPLIED; ran at <Y> from frontmatter`. Unprompted, it is a non-event reported as a defect. The full resolution rules live in worktree-pipeline's `references/models-and-effort.md`.
 

@@ -10,6 +10,7 @@ description: >-
   the main conversation.
 model: sonnet
 effort: medium
+metadata: { night_shift_tier: 3, reasoning: medium }
 tools: Bash, Read, Write, Glob, Grep
 skills:
   - agent-browser

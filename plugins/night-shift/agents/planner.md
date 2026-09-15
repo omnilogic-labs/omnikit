@@ -7,7 +7,8 @@ description: >-
   starts. Reads prior art and treats existing behavior as the baseline rather
   than re-deciding settled questions. Does not implement and does not verify.
 model: fable
-effort: high
+effort: medium
+metadata: { night_shift_tier: 1, reasoning: medium }
 tools: Agent, Bash, Read, Grep, Glob, Skill, WebFetch, WebSearch
 ---
 

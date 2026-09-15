@@ -10,7 +10,6 @@ description: >-
   written down for later or cheaper execution, not the work done now.
   Triggers include "write a plan folder", "make an implementation playbook",
   "turn this audit into a plan", "plan this out for another agent to build".
-effort: high
 ---
 
 # plan-forge
@@ -47,12 +46,15 @@ plan folder is a set of briefs, never worksheets — nothing in the plan records
 
 ## Models
 
-Authoring runs on fable deliberately — `night-shift-planner` and `night-shift-plan-author`
-both pin it. A plan is written once and executed many steps deep; an error in it is copied
+Authoring runs at capability tier 1 deliberately — `night-shift-planner` and
+`night-shift-plan-author` resolve to Fable on Claude and Astra on Codex. A plan is written once and executed many steps deep; an error in it is copied
 into every downstream step, while execution errors stay local. Spend at the point of highest
 leverage and let execution be the cheap part.
 
 ## The pipeline
+
+On Codex with agent delegation, read `../worktree-pipeline/references/codex-roster.md` before
+dispatching a Night Shift role. It resolves each role's portable tier to the right Codex model.
 
 Run the phases in order. Each writes its output to a scratch directory (the harness's
 scratchpad, or `/tmp` failing that) so later phases and dispatched agents read files, not
