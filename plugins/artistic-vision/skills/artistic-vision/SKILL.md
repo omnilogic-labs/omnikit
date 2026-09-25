@@ -29,6 +29,35 @@ bin/art <subcommand> [args] [options]
 
 Gemini-powered subcommands need `GEMINI_API_KEY` in the environment (`GOOGLE_API_KEY` is accepted as a legacy fallback); the binary enforces this itself, only when the call actually needs it. Sharp-powered subcommands run locally and need no API key, so never gate them behind a key check.
 
+### Windows PowerShell
+
+If the Bash launcher cannot find Bun on Windows, invoke the TypeScript entrypoint
+with Bun's Windows executable. Set `$skillDir` to this skill's directory in the
+source checkout or installed plugin cache, without pinning a cache version:
+
+```powershell
+$skillDir = 'C:\path\to\artistic-vision'
+$bun = Join-Path $env:USERPROFILE '.bun\bin\bun.exe'
+& $bun (Join-Path $skillDir 'scripts\index.ts') info .\image.png
+```
+
+This direct route bypasses the Bash launcher's first-run dependency install. If
+the plugin dependencies are absent, run `& $bun install --cwd <plugin-root>`
+once, where `<plugin-root>` is the ancestor of `$skillDir` containing the
+plugin's `package.json`.
+
+For Gemini commands, use an existing `GEMINI_API_KEY` environment variable. If
+Claude Code stores it in the user settings instead, load it in the same
+PowerShell invocation as the command, without displaying the settings or key:
+
+```powershell
+$settings = Join-Path $env:USERPROFILE '.claude\settings.json'
+$env:GEMINI_API_KEY = (Get-Content -Raw -LiteralPath $settings | ConvertFrom-Json).env.GEMINI_API_KEY
+& $bun (Join-Path $skillDir 'scripts\index.ts') describe .\image.png 'What is visible?'
+```
+
+Local commands such as `info`, `palette`, and `optimize` do not need this key.
+
 ## Gemini-powered Subcommands (API calls)
 
 | Subcommand                               | Usage                     | What it does                                     |
