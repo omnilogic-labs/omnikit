@@ -18,7 +18,9 @@ This repo is a Claude Code plugin marketplace, a Codex skill set, and a Gemini C
 - **agent-browser** (browser-buddy plugin): how to drive the agent-browser CLI; the plugin also ships the browser-buddy operator agent (sonnet)
 - **artistic-vision**: Gemini-powered vision, generation, and editing; Sharp-powered local processing
 - **plain-writing**: how to write prose a reader understands on the first pass; the rules, a revision pass, before and after rewrites, and skeletons for common document types
-- **task-triage, worktree-pipeline, task-tracking, plan-forge, plan-queue** (night-shift plugin): unattended build runs; the plugin also ships a ten-agent roster and the /orchestrate, /drain, and /abort commands. Project specifics live in a `.claude/night-shift.md` adapter in the consuming repo, never in the package
+- **onepassword**: read secrets from 1Password through the op CLI, WSL aware
+- **primer**: turn a vague product idea into a build brief and task files
+- **render**: work with Render.com, from render.yaml to SSH to the REST API
 
 ## Conventions
 

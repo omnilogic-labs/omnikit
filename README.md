@@ -23,10 +23,6 @@ compressing an idea until only the author can unpack it. Ships the rules, a
 ten-step revision pass to run against any draft, twelve before and after
 rewrites, and skeletons for the common document types.
 
-### Night Shift
-
-Runs a board of work unattended. Ships a roster of small composable agents (orchestrator, delegate, planner, researcher, scout, verifier, fixer, integrator), three skills (`task-triage`, `worktree-pipeline`, `task-tracking`), and the `/orchestrate`, `/drain`, and `/abort` commands. `/orchestrate any open bugs on github` triages the board, builds each unit in its own worktree, grades it against criteria it did not write for itself, and lands it, while you steer from the foreground. Every agent is usable on its own. Nothing in the package names a project: all specifics live in a `.claude/night-shift.md` adapter in the consuming repo.
-
 ## Installation
 
 ### Clone and link (recommended)
@@ -46,8 +42,8 @@ or renames a skill. It installs:
 
 | Tool        | What it links                     | Where                                |
 | ----------- | --------------------------------- | ------------------------------------ |
-| Claude Code | 11 skills, 11 agents, 3 commands  | `~/.claude/{skills,agents,commands}` |
-| Codex CLI   | 11 skills                         | `~/.codex/skills`                    |
+| Claude Code | 6 skills, 1 agent                 | `~/.claude/{skills,agents}`          |
+| Codex CLI   | 6 skills                          | `~/.codex/skills`                    |
 | Gemini CLI  | this clone, as a linked extension | `gemini extensions link .`           |
 
 Useful flags:
@@ -65,9 +61,7 @@ command name collides with one you already have, it reports the conflict and
 leaves your file alone until you pass `--force`, which moves yours aside with a
 timestamp.
 
-Agents are linked under the name in their frontmatter, not their filename, so
-`agents/planner.md` installs as `night-shift-planner.md` and will not collide
-with a `planner.md` of your own.
+Agents are linked under the name in their frontmatter, not their filename.
 
 `CLAUDE_CONFIG_DIR` and `CODEX_HOME` are respected if you have moved either
 config directory.
@@ -87,7 +81,6 @@ Then install individual plugins:
 /plugin install artistic-vision@omnikit
 /plugin install onepassword@omnikit
 /plugin install render@omnikit
-/plugin install night-shift@omnikit
 /plugin install primer@omnikit
 /plugin install plain-writing@omnikit
 ```
@@ -133,10 +126,10 @@ omnikit/
       skills/agent-browser/SKILL.md
       agents/browser-buddy.md       # Operator subagent (Claude Code only)
     artistic-vision/
-    night-shift/
-      agents/                       # Agent roster (Claude Code only)
-      commands/                     # /orchestrate, /drain, /abort (Claude Code only)
-      skills/                       # task-triage, worktree-pipeline, task-tracking
+    onepassword/
+    plain-writing/
+    primer/
+    render/
   skills/                           # Generated symlinks for Codex and Gemini discovery
   install.sh                        # Links everything into Claude Code, Codex, and Gemini
   CLAUDE.md                         # Claude Code project context
