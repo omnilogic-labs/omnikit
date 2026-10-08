@@ -4,11 +4,13 @@
 //
 // Committed trees (the Claude plugin) always render any-OS: every OS block is kept under its label
 // line. The machine-local trees (dist/<host>) render for --os (default any), and record it in
-// dist/<host>/.os. --check builds into a temp dir and exits 1, listing every path whose content
-// differs from the committed Claude tree under --out.
+// dist/<host>/.os. The root skills/ tree (what `npx skills` installs) is committed too and renders
+// any-OS: per skill, a dispatcher SKILL.md plus platforms/<host>.md bodies. --check builds into a
+// temp dir and exits 1, listing every path under the committed trees (the Claude plugin and root
+// skills/) whose content or executable bit differs from the fresh build.
 
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { platform, tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
 import * as prettier from "prettier";
 import { HOSTS, HOST_NAMES, type Host, type HostName, type Tier, varsFor } from "./hosts";
@@ -271,6 +273,106 @@ async function buildAgents(src: string, os: OsTarget, out: Outputs, errors: Rend
   }
 }
 
+// ---------- portable root skills/ ----------
+
+/** Root of the portable tree that `npx skills` installs. Committed, so it renders any-OS. */
+export const PORTABLE_ROOT = "skills";
+/** Platform file that agents other than the three hosts read. */
+export const PORTABLE_DEFAULT_HOST: HostName = "codex";
+
+/** The short SKILL.md body that points each agent at its platform file. */
+export function dispatcherBody(skill: string): string {
+  const rows = HOST_NAMES.map((h) => `- ${HOSTS[h].label}: \`platforms/${h}.md\``);
+  return [
+    `# ${skill}`,
+    "",
+    "Read the file for your platform and ignore the other platform files:",
+    "",
+    ...rows,
+    `- Any other agent: \`platforms/${PORTABLE_DEFAULT_HOST}.md\``,
+    "",
+    "Paths in your platform file are relative to this folder. When `platforms/<host>/<path>` exists,",
+    "read it instead of `<path>` (`<host>` is your platform file's name without `.md`).",
+    "",
+  ].join("\n");
+}
+
+function decode(d: string | Uint8Array): string {
+  return typeof d === "string" ? d : new TextDecoder().decode(d);
+}
+
+/**
+ * Emit the portable tree: each skill rendered any-OS for every host. Non-.md files are copied
+ * once; a rendered .md identical on every host lands once at its usual path, one that differs
+ * lands at platforms/<host>/<path>. SKILL.md becomes a dispatcher plus platforms/<host>.md.
+ */
+async function buildPortable(src: string, out: Outputs, errors: RenderError[]) {
+  const root = join(src, "skills");
+  const cfg = await loadPrettierConfig();
+  const fmt = (text: string, path: string) => prettier.format(text, { ...cfg, filepath: path });
+  for (const skill of await subdirs(root)) {
+    const dir = join(root, skill);
+    const base = `${PORTABLE_ROOT}/${skill}`;
+    for (const rel of await walk(dir)) {
+      const file = join(dir, rel);
+      const s = await stat(file);
+      const bytes = await readFile(file);
+      if (!rel.endsWith(".md")) {
+        const data = rel.endsWith(".json")
+          ? await fmt(bytes.toString("utf8"), `${base}/${rel}`)
+          : new Uint8Array(bytes);
+        out.set(`${base}/${rel}`, { data, mode: s.mode });
+        continue;
+      }
+      const text = bytes.toString("utf8");
+      const rendered: Partial<Record<HostName, string>> = {};
+      for (const name of HOST_NAMES) {
+        const r = render(text, {
+          host: name,
+          os: "any",
+          vars: varsFor(name),
+          file,
+          hosts: HOST_NAMES,
+        });
+        if (!r.ok) {
+          errors.push(...r.errors);
+          continue;
+        }
+        rendered[name] = await fmt(r.text, `${base}/${rel}`);
+      }
+      if (Object.keys(rendered).length !== HOST_NAMES.length) continue;
+      if (rel === "SKILL.md") {
+        const claude = splitFrontmatter(rendered.claude!);
+        if (!claude) {
+          errors.push({ file, line: 1, message: "SKILL.md has no frontmatter" });
+          continue;
+        }
+        const head = joinFrontmatter({
+          ...claude,
+          blocks: claude.blocks.filter((b) => b.key === "name" || b.key === "description"),
+          body: "\n" + dispatcherBody(skill),
+        });
+        out.set(`${base}/SKILL.md`, { data: await fmt(head, `${base}/SKILL.md`), mode: s.mode });
+        for (const name of HOST_NAMES) {
+          const fm = splitFrontmatter(rendered[name]!);
+          const body = trimLeadingBlank(fm ? fm.body : rendered[name]!);
+          const path = `${base}/platforms/${name}.md`;
+          out.set(path, { data: await fmt(body, path), mode: s.mode });
+        }
+        continue;
+      }
+      const texts = HOST_NAMES.map((h) => rendered[h]!);
+      if (texts.every((t) => t === texts[0])) {
+        out.set(`${base}/${rel}`, { data: texts[0], mode: s.mode });
+      } else {
+        for (const name of HOST_NAMES) {
+          out.set(`${base}/platforms/${name}/${rel}`, { data: rendered[name]!, mode: s.mode });
+        }
+      }
+    }
+  }
+}
+
 // ---------- prettier ----------
 
 let prettierConfig: prettier.Options | null = null;
@@ -313,11 +415,25 @@ export async function compile(
   }
   const errors = [...new Set(errs.map(formatError))];
   if (errors.length === 0) await formatOutputs(out);
-  return { out, errors };
+  // Formatted on its own: buildPortable compares per-host renders after prettier.
+  const portable: Outputs = new Map();
+  if (errors.length === 0) await buildPortable(src, portable, errs);
+  for (const [k, v] of portable) out.set(k, v);
+  const all = [...new Set(errs.map(formatError))];
+  return { out, errors: all };
 }
 
 export function outputDirs(): string[] {
-  return HOST_NAMES.flatMap((h) => [`${HOSTS[h].root}/skills`, `${HOSTS[h].root}/agents`]);
+  return [
+    ...HOST_NAMES.flatMap((h) => [`${HOSTS[h].root}/skills`, `${HOSTS[h].root}/agents`]),
+    PORTABLE_ROOT,
+  ];
+}
+
+/** Generated dirs that are committed, and so compared by --check. */
+export function committedDirs(): string[] {
+  const claude = HOSTS.claude.root;
+  return [`${claude}/skills`, `${claude}/agents`, PORTABLE_ROOT];
 }
 
 /** Build src into outDir. Wipes only the generated skills/ and agents/ dirs of each host. */
@@ -335,23 +451,49 @@ export async function build(src: string, outDir: string, os: OsTarget = "any"): 
   return [];
 }
 
-/** Paths under the Claude tree whose content differs between two out dirs. */
-export async function diffClaudeTree(builtDir: string, committedDir: string): Promise<string[]> {
+/** True when the file at rel (under dir) is executable. Windows asks git, which keeps the bit. */
+async function isExecutable(dir: string, rel: string): Promise<boolean> {
+  if (platform() === "win32") {
+    const p = Bun.spawnSync(["git", "-C", dir, "ls-files", "-s", "--", rel]);
+    const mode = p.stdout.toString().split(/\s/)[0];
+    if (mode === "100755") return true;
+    if (mode === "100644") return false;
+  }
+  const s = await stat(join(dir, rel));
+  return (s.mode & 0o111) !== 0;
+}
+
+/**
+ * Paths under the committed trees (Claude plugin skills/ and agents/, root skills/) whose content
+ * or executable bit differs between a fresh build and the committed out dir.
+ */
+export async function diffCommittedTrees(
+  builtDir: string,
+  committedDir: string
+): Promise<string[]> {
   const diffs: string[] = [];
-  const root = HOSTS.claude.root;
-  for (const sub of ["skills", "agents"]) {
-    const a = join(builtDir, root, sub);
-    const b = join(committedDir, root, sub);
+  for (const sub of committedDirs()) {
+    const a = join(builtDir, sub);
+    const b = join(committedDir, sub);
     const files = [...new Set([...(await walk(a)), ...(await walk(b))])].sort();
     for (const f of files) {
       const [x, y] = await Promise.all([
         readFile(join(a, f)).catch(() => null),
         readFile(join(b, f)).catch(() => null),
       ]);
-      const path = `${root}/${sub}/${f}`;
+      const path = `${sub}/${f}`;
       if (!x) diffs.push(`${path} (not generated; remove it or add a source)`);
       else if (!y) diffs.push(`${path} (missing; run bun run build)`);
       else if (!x.equals(y)) diffs.push(`${path} (differs; run bun run build)`);
+      else {
+        const [ex, ey] = await Promise.all([
+          isExecutable(builtDir, path),
+          isExecutable(committedDir, path),
+        ]);
+        if (ex !== ey) {
+          diffs.push(`${path} (executable bit ${ey ? "set" : "missing"}; run bun run build)`);
+        }
+      }
     }
   }
   return diffs;
@@ -396,13 +538,13 @@ async function main() {
         for (const e of errors) console.error(e);
         process.exit(1);
       }
-      const diffs = await diffClaudeTree(tmp, opts.out);
+      const diffs = await diffCommittedTrees(tmp, opts.out);
       if (diffs.length) {
         console.error(`build: ${diffs.length} generated file(s) out of date:`);
         for (const d of diffs) console.log(d);
         process.exit(1);
       }
-      console.error("build: Claude tree is up to date");
+      console.error("build: committed trees are up to date");
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
