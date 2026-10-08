@@ -27,6 +27,44 @@ const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 
 const optional = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
+const PANE = "workers";
+const TAIL_LINES = 40;
+
+// The job the /workers pane shows; a reload resets it to the newest job.
+let selected: string | null = null;
+
+function mmss(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = String(Math.floor(total / 60)).padStart(2, "0");
+  const s = String(total % 60).padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+// One short phrase for the last stream line. codex prints item.completed:<type>
+// plus the item's text; agy prints {"event":...} objects; anything else is cut raw.
+function summarize(line: string): string {
+  const cut = (t: string) => t.replace(/\s+/g, " ").trim().slice(0, 60);
+  if (line === "") return "starting";
+  try {
+    const ev = JSON.parse(line) as Record<string, unknown>;
+    const type = typeof ev.type === "string" ? ev.type : "";
+    if (type.startsWith("item.completed")) {
+      const item = (ev.item ?? {}) as Record<string, unknown>;
+      const text = typeof item.text === "string" ? item.text : "";
+      return cut(`${type}:${String(item.type ?? "")} ${text}`);
+    }
+    if (typeof ev.event === "string") {
+      const step = (ev.step_update ?? {}) as Record<string, unknown>;
+      const text = typeof step.text_delta === "string" ? step.text_delta : "";
+      return cut(`${ev.event} ${text}`);
+    }
+    if (type !== "") return cut(`${type} ${typeof ev.text === "string" ? ev.text : ""}`);
+  } catch {
+    // not JSON: fall through to the raw line
+  }
+  return cut(line);
+}
+
 // Module-local: timers die with a reload, so session.start re-arms them.
 const timers = new Map<string, { cancel: () => void }>();
 
@@ -145,8 +183,76 @@ export const register: Register = (on) => {
       },
       isDeferred: false,
     });
+    await $.command.register({
+      name: "workers",
+      description: "Show external worker jobs and tail the newest one's output",
+      argumentHint: "[job id]",
+    });
     for (const job of await read($, jobs)) if (job.status === "running") poll($, job.id);
     return started;
+  });
+
+  on("command.run", { command: "workers" }, async ($, e) => {
+    const list = await read($, jobs);
+    const arg = e.args.trim();
+    if (arg !== "" && !list.some((j) => j.id === arg)) {
+      return { text: `No worker job ${arg}. Jobs: ${list.map((j) => j.id).join(", ") || "none"}.` };
+    }
+    selected = arg === "" ? (list.at(-1)?.id ?? null) : arg;
+    await $.ui.open({ id: PANE, title: "Workers" });
+    return { text: "Workers pane opened." };
+  });
+
+  on("ui.render", { component: "AbovePrompt" }, async ($, e, next) => {
+    const running = (await read($, jobs)).filter((j) => j.status === "running");
+    if (e.props.hasSurvey || running.length === 0) return next(e);
+    const now = await $.clock.now();
+    const { Box, Text } = $.ui.resolve(e);
+    return (
+      <Box flexDirection="column">
+        {running.map((j) => (
+          <Text key={j.id} dimColor>
+            {j.engine} {j.id} {mmss(now - j.startedAt)} {summarize(j.lastLine)}
+          </Text>
+        ))}
+      </Box>
+    );
+  });
+
+  on("ui.render", { component: "Pane", requestId: "workers" }, async ($, e) => {
+    const list = await read($, jobs);
+    const { Box, Text } = $.ui.resolve(e);
+    const job = list.find((j) => j.id === selected) ?? list.at(-1);
+    if (job === undefined) {
+      return (
+        <Box flexDirection="column">
+          <Text dimColor>No worker jobs yet.</Text>
+        </Box>
+      );
+    }
+    const stream = (await readText($, `${job.dir}/stream.jsonl`)) ?? "";
+    const room = Math.max(1, Math.min(TAIL_LINES, (e.viewport?.rows ?? 24) - 5));
+    const tail = stream.split("\n").filter(Boolean).slice(-room);
+    const now = await $.clock.now();
+    const code = job.status === "running" ? "" : ` (exit ${job.exitCode ?? "?"})`;
+    return (
+      <Box flexDirection="column">
+        <Text>
+          {job.engine} {job.id} {job.status}
+          {code} {mmss((job.endedAt ?? now) - job.startedAt)}
+        </Text>
+        <Text dimColor>{job.task}</Text>
+        {list.length > 1 && (
+          <Text dimColor>jobs: {list.map((j) => j.id).join(" ")} (/workers &lt;id&gt;)</Text>
+        )}
+        {tail.length === 0 && <Text dimColor>No output yet.</Text>}
+        {tail.map((l, i) => (
+          <Text key={`${job.lines}-${i}`} dimColor>
+            {l.slice(0, 200)}
+          </Text>
+        ))}
+      </Box>
+    );
   });
 
   on("tool.call", { tool: "mcp__omnilogic-labs__external_worker" }, async ($, e) => {

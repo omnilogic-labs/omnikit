@@ -1,5 +1,5 @@
 import { expect, mock, test } from "claude-code/testing";
-import type { On } from "claude-code";
+import type { On, RenderElement } from "claude-code";
 
 import type { WorkerJob } from "../types";
 
@@ -107,4 +107,87 @@ test("a denied Bash call marks the job failed", async ($, on) => {
   expect(ran.deny ?? ran.text).toContain("not allowed");
   const [job] = w.state.jobs;
   expect(job?.status).toBe("failed");
+});
+
+const PROPS = { hasSurvey: false, isWorking: false, maxRows: 10, columns: 100 } as never;
+
+test("the band shows one line per running job and falls through at zero", async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000 });
+  world(on);
+  const SENTINEL = "NEXT-FALLTHROUGH";
+  on(
+    "ui.render",
+    { component: "AbovePrompt" },
+    async () => ({ type: "Text", props: {}, children: [SENTINEL] }) as never
+  );
+
+  const idle = await $.ui.mount({
+    plugin: "omnilogic-labs",
+    surface: "terminal",
+    component: "AbovePrompt",
+    props: PROPS,
+  });
+  expect(JSON.stringify(await idle.drawn())).toContain(SENTINEL);
+  await idle.unmount();
+
+  await $.tool.call({ tool: TOOL, task: "one", engine: "fake" });
+  await $.tool.call({ tool: TOOL, task: "two", engine: "codex" });
+  await clock.advance(65_000);
+  const ui = await $.ui.mount({
+    plugin: "omnilogic-labs",
+    surface: "terminal",
+    component: "AbovePrompt",
+    props: PROPS,
+  });
+  const drawn: RenderElement = await ui.drawn();
+  const lines = await ui.findAll({ type: "Text" });
+  expect(lines).toHaveLength(2);
+  const text = JSON.stringify(drawn);
+  expect(text).toContain("fake");
+  expect(text).toContain("codex");
+  expect(text).toContain("01:05");
+  expect(text).not.toContain(SENTINEL);
+  await ui.unmount();
+});
+
+test("the band summarizes codex item.completed lines", async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000 });
+  const w = world(on);
+  await $.tool.call({ tool: TOOL, task: "x", engine: "codex" });
+  const [job] = w.state.jobs;
+  w.files.set(
+    `${job?.dir}/stream.jsonl`,
+    '{"type":"item.completed","item":{"type":"agent_message","text":"  hello   world "}}\n'
+  );
+  await clock.advance(1_000);
+  const ui = await $.ui.mount({
+    plugin: "omnilogic-labs",
+    surface: "terminal",
+    component: "AbovePrompt",
+    props: PROPS,
+  });
+  expect(JSON.stringify(await ui.drawn())).toContain("item.completed:agent_message hello world");
+  await ui.unmount();
+});
+
+test("the workers pane tails the stream with status", async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000 });
+  const w = world(on);
+  await $.tool.call({ tool: TOOL, task: "x", engine: "fake" });
+  const [job] = w.state.jobs;
+  w.files.set(`${job?.dir}/stream.jsonl`, '{"n":1}\n{"n":2}\n');
+  w.files.set(`${job?.dir}/exit`, "0\n");
+  await clock.advance(1_000);
+  const ui = await $.ui.mount({
+    plugin: "omnilogic-labs",
+    surface: "terminal",
+    component: "Pane",
+    requestId: "workers",
+    props: { title: "Workers" } as never,
+  });
+  const text = JSON.stringify(await ui.drawn());
+  expect(text).toContain("done");
+  expect(text).toContain("exit 0");
+  expect(text).toContain('{\\"n\\":2}');
+  await ui.unmount();
 });
