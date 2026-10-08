@@ -1,5 +1,5 @@
 /**
- * Imagen info subcommand — print image metadata using sharp.
+ * Imagen info subcommand: print image metadata using sharp.
  *
  * Quick way to check dimensions, format, channels, and file size
  * without opening an image editor. No API call needed.

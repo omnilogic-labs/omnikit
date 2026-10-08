@@ -1,5 +1,5 @@
 /**
- * Imagen diff subcommand — structured semantic diff of two images.
+ * Imagen diff subcommand: structured semantic diff of two images.
  *
  * Combines pixel-level analysis (via sharp) with AI-powered semantic
  * understanding of what changed and whether it's an improvement.

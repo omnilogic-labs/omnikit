@@ -1,5 +1,5 @@
 /**
- * Imagen extract subcommand — AI-guided subject extraction / background removal.
+ * Imagen extract subcommand: AI-guided subject extraction / background removal.
  *
  * Simpler interface than crafting edit prompts manually.
  * Always outputs PNG to preserve transparency.
@@ -64,7 +64,7 @@ export function registerExtract(program: Command): void {
           { inlineData: { data: base64, mimeType } },
           {
             text:
-              `Keep only ${subject} from this image, exactly as it appears — identical pixels, detail, lighting and scale. ` +
+              `Keep only ${subject} from this image, exactly as it appears: identical pixels, detail, lighting and scale. ` +
               `Replace everything else with one flat, solid, pure ${keyColor} (${KEY_HEX[keyColor]}). ` +
               `The background must be a single uniform ${keyColor} with no gradients, no shadows, no texture, and absolutely no checkerboard pattern.`,
           },
@@ -95,7 +95,7 @@ export function registerExtract(program: Command): void {
         const { png, keyedFraction } = await keyToAlpha(buffer, keyColor);
         if (keyedFraction < 0.03) {
           log.warn(
-            `Only ${(keyedFraction * 100).toFixed(1)}% of pixels keyed out — the model likely ignored the ${keyColor} background request; inspect the result.`
+            `Only ${(keyedFraction * 100).toFixed(1)}% of pixels keyed out. The model likely ignored the ${keyColor} background request; inspect the result.`
           );
         }
         writeImageBuffer(output, png);

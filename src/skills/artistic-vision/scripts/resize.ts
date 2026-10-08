@@ -1,5 +1,5 @@
 /**
- * Imagen resize subcommand — resize images using sharp.
+ * Imagen resize subcommand: resize images using sharp.
  *
  * Common operation for preparing sprites, thumbnails, or assets.
  * Supports pixel art via --kernel nearest to avoid blurring.

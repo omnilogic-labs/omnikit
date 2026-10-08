@@ -1,5 +1,5 @@
 /**
- * Imagen compare subcommand — compare two images using Gemini.
+ * Imagen compare subcommand: compare two images using Gemini.
  *
  * Useful for diffing before/after edits, comparing sprite variants,
  * or checking visual regressions.

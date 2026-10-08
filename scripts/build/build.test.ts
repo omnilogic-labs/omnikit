@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { build, compile, diffCommittedTrees, emitAgent } from "./build";
+import { build, compile, diffCommittedTrees, emitAgent, ROLE_PROMPTS, ROLE_SKILL } from "./build";
 import { HOSTS, HOST_NAMES, varsFor } from "./hosts";
 import { OS_NAMES, OS_TARGETS, type OsTarget } from "./os";
 import { filterFrontmatter, render, tomlString, type RenderError } from "./render";
@@ -511,5 +511,47 @@ describe("portable root skills/", () => {
       await chmod(join(out, p), 0o755);
     }
     expect(check().exitCode).toBe(0);
+  });
+});
+
+describe("role prompts", () => {
+  const SRC = join(import.meta.dir, "..", "..", "src");
+  const text = (d: string | Uint8Array | undefined) =>
+    d === undefined ? undefined : typeof d === "string" ? d : new TextDecoder().decode(d);
+  const bodyOf = (agentMd: string) => agentMd.replace(/^---\n[\s\S]*?\n---\n+/, "");
+
+  test("the coordinator skill carries roles/<role>.md with each agent's rendered body", async () => {
+    const { out, errors } = await compile(SRC);
+    expect(errors).toEqual([]);
+    for (const role of ROLE_PROMPTS) {
+      for (const h of HOST_NAMES) {
+        const root = HOSTS[h].root;
+        const got = text(out.get(`${root}/skills/${ROLE_SKILL}/roles/${role}.md`)?.data);
+        const agent = text(out.get(`${root}/agents/${role}.md`)?.data);
+        expect(got).toBeDefined();
+        expect(got!.startsWith("---")).toBe(false);
+        // Claude and agy agent files carry frontmatter; Codex's .md is the bare body copy.
+        expect(got).toBe(bodyOf(agent!));
+      }
+      const once = out.get(`skills/${ROLE_SKILL}/roles/${role}.md`);
+      const perHost = HOST_NAMES.every((h) =>
+        out.has(`skills/${ROLE_SKILL}/platforms/${h}/roles/${role}.md`)
+      );
+      expect(Boolean(once) !== perHost).toBe(true);
+      if (once) {
+        expect(text(once.data)).toBe(
+          text(out.get(`${HOSTS.claude.root}/skills/${ROLE_SKILL}/roles/${role}.md`)!.data)
+        );
+      }
+    }
+    expect(ROLE_PROMPTS).toEqual(["planner", "builder", "verifier"]);
+  });
+
+  test("a Claude-only agent is not rendered for other hosts", async () => {
+    const { out, errors } = await compile(SRC);
+    expect(errors).toEqual([]);
+    expect(out.has(`${HOSTS.claude.root}/agents/external-runner.md`)).toBe(true);
+    expect(out.has(`${HOSTS.codex.root}/agents/external-runner.toml`)).toBe(false);
+    expect(out.has(`${HOSTS.agy.root}/agents/external-runner.md`)).toBe(false);
   });
 });

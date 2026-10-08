@@ -1,5 +1,5 @@
 /**
- * Imagen sheet subcommand — split/assemble/analyze sprite sheets.
+ * Imagen sheet subcommand: split/assemble/analyze sprite sheets.
  *
  * Split and assemble are local sharp operations. Analyze uses Gemini
  * for AI-powered sprite sheet understanding.

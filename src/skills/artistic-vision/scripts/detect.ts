@@ -1,5 +1,5 @@
 /**
- * Imagen detect subcommand — object detection with bounding boxes using Gemini.
+ * Imagen detect subcommand: object detection with bounding boxes using Gemini.
  *
  * Identifies objects in images and returns their locations as bounding boxes.
  * Optionally draws the boxes on the image.

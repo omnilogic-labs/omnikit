@@ -1,5 +1,5 @@
 /**
- * Imagen crop subcommand — crop an image region using sharp.
+ * Imagen crop subcommand: crop an image region using sharp.
  *
  * Extract specific regions from sprite sheets, screenshots, or any
  * image. Takes x,y,w,h coordinates.
