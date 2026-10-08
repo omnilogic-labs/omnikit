@@ -4,8 +4,10 @@
 #   Claude Code   installs the omnilogic-labs plugin from this clone's
 #                 marketplace (omnikit), and removes the per-skill symlinks
 #                 that older versions of this script created.
-#   Codex, agy    get one symlink per skill in ~/.agents/skills, pointing back
+#   Codex         gets one symlink per skill in ~/.agents/skills, pointing back
 #                 into this clone, so an edit here is live immediately.
+#   agy           (Antigravity CLI) gets the same links in ~/.gemini/config/skills,
+#                 its global skills root. It does not read ~/.agents/skills.
 #   Gemini CLI    links this clone as an extension.
 #
 # Safe to re-run. Status goes to stderr. Machine output (--check findings and
@@ -16,6 +18,7 @@ REPO_ROOT="$(cd "$(dirname "$0")" && pwd -P)"
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 CODEX_SKILLS_DIR="${CODEX_HOME:-$HOME/.codex}/skills"
 AGENTS_SKILLS_DIR="$HOME/.agents/skills"
+AGY_SKILLS_DIR="$HOME/.gemini/config/skills"
 SKILLS_SRC="$REPO_ROOT/plugins/omnilogic-labs/skills"
 MARKETPLACE="omnikit"
 PLUGIN="omnilogic-labs"
@@ -23,6 +26,7 @@ PLUGIN_ID="$PLUGIN@$MARKETPLACE"
 
 DO_CLAUDE=false
 DO_AGENTS=false
+DO_AGY=false
 DO_GEMINI=false
 TARGETED=false
 DEPS=true
@@ -46,8 +50,10 @@ Installs this repo's skills into the agent tools on this machine.
 Targets (default: every tool found on PATH):
   --claude          Claude Code: install the omnilogic-labs plugin from the
                     omnikit marketplace in this clone, remove legacy links
-  --agents          Codex and agy: link each skill into ~/.agents/skills
+  --agents          Codex: link each skill into ~/.agents/skills
                     (--codex is an alias)
+  --agy             Antigravity CLI: link each skill into
+                    ~/.gemini/config/skills
   --gemini          Gemini CLI: link this clone as an extension
 
 Options:
@@ -67,6 +73,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --claude) DO_CLAUDE=true && TARGETED=true ;;
     --agents | --codex) DO_AGENTS=true && TARGETED=true ;;
+    --agy) DO_AGY=true && TARGETED=true ;;
     --gemini) DO_GEMINI=true && TARGETED=true ;;
     --check) CHECK=true ;;
     --no-deps) DEPS=false ;;
@@ -91,7 +98,8 @@ has() { command -v "$1" > /dev/null 2>&1; }
 
 if ! $TARGETED; then
   has claude && DO_CLAUDE=true
-  if has codex || has agy || [ -d "$AGENTS_SKILLS_DIR" ]; then DO_AGENTS=true; fi
+  if has codex || [ -d "$AGENTS_SKILLS_DIR" ]; then DO_AGENTS=true; fi
+  if has agy || [ -d "$AGY_SKILLS_DIR" ]; then DO_AGY=true; fi
   has gemini && DO_GEMINI=true
 fi
 
@@ -285,7 +293,7 @@ install_claude() {
 install_agents() {
   local names=() src name
   say ""
-  say "Codex and agy ($AGENTS_SKILLS_DIR)"
+  say "Codex ($AGENTS_SKILLS_DIR)"
   $DRY_RUN || mkdir -p "$AGENTS_SKILLS_DIR"
 
   while IFS= read -r src; do
@@ -297,6 +305,42 @@ install_agents() {
 
   # Codex reads ~/.agents/skills now; older installs linked here as well.
   prune_dir legacy "$CODEX_SKILLS_DIR"
+}
+
+# agy scans ~/.gemini/config/skills one level deep and follows symlinks.
+install_agy() {
+  local names=() src name
+  say ""
+  say "Antigravity CLI ($AGY_SKILLS_DIR)"
+  $DRY_RUN || mkdir -p "$AGY_SKILLS_DIR"
+
+  while IFS= read -r src; do
+    name="$(basename "$src")"
+    names+=("$name")
+    link_into "$AGY_SKILLS_DIR" "$src" "$name"
+  done < <(skill_dirs)
+  prune_dir stale "$AGY_SKILLS_DIR" "${names[@]}"
+}
+
+# Codex walks each skill directory several levels deep, so a node_modules
+# inside a skill exposes every SKILL.md that an npm package ships (agent-browser
+# ships nine) as an extra, unprefixed skill. bunfig.toml hoists dependencies to
+# the root node_modules; this removes per-skill ones left by an older layout.
+nested_modules() {
+  find "$SKILLS_SRC" -mindepth 2 -maxdepth 2 -name node_modules -type d | sort
+}
+
+clean_nested_modules() {
+  local dir
+  while IFS= read -r dir; do
+    [ -n "$dir" ] || continue
+    if $CHECK; then
+      problem nested "$dir"
+      continue
+    fi
+    run rm -rf "$dir"
+    say "  remove   ${dir#"$REPO_ROOT"/} (bun now hoists to the root)"
+  done < <(nested_modules)
 }
 
 install_gemini() {
@@ -339,9 +383,14 @@ if [ ! -d "$SKILLS_SRC" ]; then
   exit 1
 fi
 
+if $CHECK; then
+  clean_nested_modules
+fi
+
 if $DEPS; then
   say ""
   if has bun; then
+    clean_nested_modules
     say "Installing workspace dependencies (bun install)"
     if $DRY_RUN; then
       run bun install
@@ -356,9 +405,18 @@ fi
 
 sync_repo_skills
 
-$DO_CLAUDE && install_claude
-$DO_AGENTS && install_agents
-$DO_GEMINI && install_gemini
+# skipped <tool> <binary>: says a target was not chosen because its CLI is
+# missing, so a silent install never looks like a successful one.
+skipped() {
+  $TARGETED && return 0
+  say ""
+  say "$1: $2 not on PATH, skipped"
+}
+
+if $DO_CLAUDE; then install_claude; else skipped "Claude Code" claude; fi
+if $DO_AGENTS; then install_agents; else skipped "Codex" codex; fi
+if $DO_AGY; then install_agy; else skipped "Antigravity CLI" agy; fi
+if $DO_GEMINI; then install_gemini; else skipped "Gemini CLI" gemini; fi
 
 if $CHECK; then
   say ""
@@ -370,7 +428,7 @@ if $CHECK; then
   exit 0
 fi
 
-if ! $DO_CLAUDE && ! $DO_AGENTS && ! $DO_GEMINI; then
+if ! $DO_CLAUDE && ! $DO_AGENTS && ! $DO_AGY && ! $DO_GEMINI; then
   say ""
   say "No supported agent tools found on PATH (claude, codex, agy, gemini)."
   say "Install one and re-run, or force a target: bash install.sh --agents"
@@ -403,6 +461,6 @@ fi
 
 if $DO_CLAUDE && ! $DRY_RUN; then
   say ""
-  say "Claude Code runs a cached copy of the plugin. After editing a skill,"
-  say "re-run: bash install.sh --claude"
+  say "Claude Code reads the plugin from this clone. Restart open Claude Code,"
+  say "Codex, and agy sessions to pick up added or changed skills and agents."
 fi

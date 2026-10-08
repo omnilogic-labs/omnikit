@@ -1,0 +1,5 @@
+[install]
+# Hoist every dependency into the root node_modules. Codex scans skill
+# directories recursively, so a node_modules inside a skill would surface the
+# SKILL.md files that npm packages ship (agent-browser ships several).
+linker = "hoisted"

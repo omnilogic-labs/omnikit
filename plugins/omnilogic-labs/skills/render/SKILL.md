@@ -1,6 +1,7 @@
 ---
 name: render
-description: Operate Render.com services: write render.yaml blueprints, SSH into running services, call the Render REST API, and explain Render hosting. Use for "deploy to render", "render.yaml", "ssh into render", "render logs", "render api", "srv-... host", "run a migration on render".
+description: >-
+  Operate Render.com services: write render.yaml blueprints, SSH into running services, call the Render REST API, and explain Render hosting. Use for "deploy to render", "render.yaml", "ssh into render", "render logs", "render api", "srv-... host", "run a migration on render".
 ---
 
 # render

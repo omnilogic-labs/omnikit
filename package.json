@@ -23,6 +23,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "budget": "bash scripts/skill-stats.sh",
+    "verify": "bash scripts/verify-install.sh",
+    "verify:ask": "bash scripts/verify-install.sh --ask",
     "check": "prettier --check . && claude plugin validate --strict . && claude plugin validate --strict plugins/omnilogic-labs"
   },
   "devDependencies": {

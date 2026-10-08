@@ -32,4 +32,5 @@ Cross-platform agent skills by Omnilogic Labs, for Claude Code, Codex, and Gemin
 - Scripts use #!/bin/bash with set -e; status to stderr, output to stdout.
 - Version bumps update both marketplace.json and plugin.json.
 - Use `bun`, never npm or pnpm. After adding or renaming a skill, run `bash install.sh`.
+- After changing skills, agents, or install.sh, run `bun run verify` (`bun run verify:ask` also asks each tool's model).
 - Coordinate multi-step work with the coordinator skill; finished work lands on main with no leftover branches or worktrees.
