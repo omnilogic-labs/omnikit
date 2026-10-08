@@ -2,7 +2,7 @@
   "name": "omnilogic-labs",
   "displayName": "Omnilogic Labs",
   "version": "2.0.0",
-  "description": "Omnilogic Labs agent skills: browser automation, image generation and editing, 1Password secrets, Render hosting, plain writing, and primer build briefs.",
+  "description": "Omnilogic Labs skills and agents for coordinated builds, browsing, images, secrets, hosting, and writing.",
   "author": {
     "name": "Omnilogic Labs",
     "url": "https://github.com/omnilogic-labs"
