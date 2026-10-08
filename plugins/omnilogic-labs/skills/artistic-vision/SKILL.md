@@ -22,6 +22,7 @@ bin/art <subcommand> [args] [options]
 - Gemini subcommands need `GEMINI_API_KEY` (`GOOGLE_API_KEY` is a legacy fallback), checked only when a call needs it.
 - Sharp subcommands run locally and need no key. Never gate them behind a key check.
 - `--json` gives structured output; log messages go to stderr.
+- On Windows without a working Bash launcher, see `references/windows-powershell.md`.
 
 ## Subcommands
 
