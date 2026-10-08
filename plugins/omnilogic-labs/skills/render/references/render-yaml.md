@@ -6,6 +6,21 @@ below match Render's current spec; where Render renamed a field, the older alias
 is noted. When this disagrees with the live docs at
 https://render.com/docs/blueprint-spec, trust the docs.
 
+## Contents
+
+- Top-level keys
+- services
+  - Docker / prebuilt image services
+  - Autoscaling (instead of numInstances)
+  - Persistent disk (worker/web/pserv)
+  - Custom domains
+  - Static sites
+  - Cron jobs
+- envVars
+- envVarGroups
+- databases (managed Postgres)
+- Notes
+
 ## Top-level keys
 
 ```yaml
@@ -82,10 +97,10 @@ disk:
 
 Only the mounted disk survives a deploy; the rest of the container is ephemeral.
 
-The disk is mounted **only on the running service** — not on the build machine
+The disk is mounted **only on the running service**: not on the build machine
 and not on the pre-deploy machine. So for a file-backed DB on the disk (e.g.
 SQLite at `/var/data/app.db`), run migrations/seeds in `startCommand`, not in
-`buildCommand`/`preDeployCommand` — the latter write to an ephemeral path that
+`buildCommand`/`preDeployCommand`: the latter write to an ephemeral path that
 is discarded, and the live service then boots against an empty DB. Also open the
 DB connection lazily so `build` never touches the disk. See the "Disks and
 migrations" section in `SKILL.md`.

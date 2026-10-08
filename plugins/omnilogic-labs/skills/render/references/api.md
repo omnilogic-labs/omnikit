@@ -5,6 +5,19 @@ Base URL: `https://api.render.com/v1`. Auth: `Authorization: Bearer $RENDER_API_
 reference: https://api-docs.render.com. Endpoints below are the commonly used
 ones; verify shapes against the live docs since the API evolves.
 
+## Contents
+
+- Which API key (multi-account)
+- Services
+- Deploys
+- Environment variables
+- Jobs (one-off commands)
+- Events and logs
+- Datastores
+- Owners
+- Pagination
+- Error handling
+
 ## Which API key (multi-account)
 
 This is the API-side version of the SSH multi-account trap in
