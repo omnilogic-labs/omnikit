@@ -1,5 +1,5 @@
 /**
- * Imagen analyze subcommand — comprehensive image analysis.
+ * Imagen analyze subcommand: comprehensive image analysis.
  *
  * Combines local sharp metadata with Gemini AI structured analysis
  * to produce a detailed JSON report about an image.

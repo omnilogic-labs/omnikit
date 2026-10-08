@@ -52,7 +52,7 @@ const ENCODABLE: Record<string, "png" | "jpeg" | "webp" | "avif" | "tiff"> = {
  * Write a model-generated image, re-encoding it to match the requested
  * extension.
  *
- * The Gemini image models return whatever format they like — usually JPEG —
+ * The Gemini image models return whatever format they like (usually JPEG),
  * regardless of the filename you asked for. Writing those bytes verbatim to
  * `out.png` produces a file that lies about itself: `file` reports JPEG, and
  * strict readers reject it (pdf-lib's embedPng rightly refuses JPEG bytes).

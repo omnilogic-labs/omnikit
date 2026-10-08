@@ -1,5 +1,5 @@
 /**
- * Imagen generate subcommand — generate an image from a text prompt using Gemini.
+ * Imagen generate subcommand: generate an image from a text prompt using Gemini.
  *
  * Supports --inspect for auto-description, and --attempts/--judge for
  * multi-attempt generation with AI quality judging.
@@ -39,7 +39,7 @@ async function generateOnce(
   const ai = getGoogleAI();
 
   // Reference images first, then the prompt. Unlike `edit` there is no primary
-  // input, so the model has nothing to anchor its composition on — say in the
+  // input, so the model has nothing to anchor its composition on, so say in the
   // prompt what the references are for (style, likeness, palette).
   const parts: Part[] = [];
   for (const img of refs) {
@@ -131,7 +131,7 @@ export function registerGenerate(program: Command): void {
           // have already paid for: keep going and fall back to attempt one.
           try {
             const result = await judgeImage(tempPath, opts.judge, loadImageAsBase64);
-            log.info(`  Score: ${result.score}/10 — ${result.reasoning}`);
+            log.info(`  Score: ${result.score}/10. ${result.reasoning}`);
 
             if (result.score > bestScore) {
               bestScore = result.score;

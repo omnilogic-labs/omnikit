@@ -1,5 +1,5 @@
 /**
- * Imagen edit subcommand — edit an image with natural language using Gemini.
+ * Imagen edit subcommand: edit an image with natural language using Gemini.
  *
  * Supports --inspect for auto-description, and --attempts/--judge for
  * multi-attempt editing with AI quality judging.
@@ -132,7 +132,7 @@ export function registerEdit(program: Command): void {
           // have already paid for: keep going and fall back to attempt one.
           try {
             const result = await judgeImage(tempPath, opts.judge, loadImageAsBase64);
-            log.info(`  Score: ${result.score}/10 — ${result.reasoning}`);
+            log.info(`  Score: ${result.score}/10. ${result.reasoning}`);
 
             if (result.score > bestScore) {
               bestScore = result.score;

@@ -1,5 +1,5 @@
 /**
- * Imagen optimize subcommand — smart web image optimization.
+ * Imagen optimize subcommand: smart web image optimization.
  *
  * Analyzes an image and converts to the optimal format/quality/size
  * for web use. All local via sharp, no API needed.
@@ -36,15 +36,15 @@ function detectBestFormat(
   hasAlpha: boolean,
   uniqueColors: number
 ): { format: keyof sharp.FormatEnum; ext: string } {
-  // Pixel art / simple graphics with few colors — keep PNG
+  // Pixel art / simple graphics with few colors: keep PNG
   if (uniqueColors < 256) {
     return { format: "png", ext: ".png" };
   }
-  // Alpha required — WebP handles it well
+  // Alpha required: WebP handles it well
   if (hasAlpha) {
     return { format: "webp", ext: ".webp" };
   }
-  // Photos / complex images — WebP for best compression
+  // Photos / complex images: WebP for best compression
   return { format: "webp", ext: ".webp" };
 }
 

@@ -1,5 +1,5 @@
 /**
- * Imagen palette subcommand — extract color palette from an image using sharp.
+ * Imagen palette subcommand: extract color palette from an image using sharp.
  *
  * Counts unique colors by frequency, useful for design consistency,
  * brand color extraction, and pixel art analysis. No API call needed.

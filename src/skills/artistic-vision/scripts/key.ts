@@ -1,5 +1,5 @@
 /**
- * Imagen key subcommand — chroma-key a solid backdrop to true alpha, locally.
+ * Imagen key subcommand: chroma-key a solid backdrop to true alpha, locally.
  *
  * The generative models cannot emit an alpha channel; the reliable pattern is
  * to render the subject on a saturated solid color and key that color out.
@@ -15,7 +15,7 @@ export type KeyColor = "green" | "magenta";
 
 /**
  * keyness: how strongly a pixel reads as the key color, 0..1, relative to its
- * brightness — a dark green (60,40,40) must key as hard as neon (0,255,0),
+ * brightness: a dark green (60,40,40) must key as hard as neon (0,255,0),
  * because the model often renders the requested backdrop darker than asked.
  */
 function keyness(r: number, g: number, b: number, color: KeyColor): number {
@@ -92,7 +92,7 @@ export function registerKey(program: Command): void {
       let { png, keyedFraction } = await keyToAlpha(input, color);
       if (keyedFraction < 0.03) {
         log.warn(
-          `Only ${(keyedFraction * 100).toFixed(1)}% of pixels keyed out — the background probably is not solid ${color}.`
+          `Only ${(keyedFraction * 100).toFixed(1)}% of pixels keyed out. The background probably is not solid ${color}.`
         );
       }
       if (opts.trim) {

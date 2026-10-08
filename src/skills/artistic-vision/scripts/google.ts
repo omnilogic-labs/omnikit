@@ -20,10 +20,10 @@ export function getGoogleAI(): GoogleGenAI {
   return new GoogleGenAI({ apiKey });
 }
 
-/** Gemini 3.1 Flash Image — default for all operations. Fast, near-Pro quality. */
+/** Gemini 3.1 Flash Image: default for all operations. Fast, near-Pro quality. */
 export const IMAGEN_MODEL = "gemini-3.1-flash-image-preview";
 
-/** Gemini 3 Pro Image — highest fidelity. Use only when user explicitly requests high quality. */
+/** Gemini 3 Pro Image: highest fidelity. Use only when user explicitly requests high quality. */
 export const IMAGEN_PRO_MODEL = "gemini-3-pro-image-preview";
 
 /**
@@ -44,7 +44,7 @@ function isImageOnlyModel(model: string): boolean {
 /**
  * Aspect ratios accepted by ImageConfig.aspectRatio.
  *
- * Taken from the image-generation guide, not the SDK's ImageConfig typedoc —
+ * Taken from the image-generation guide, not the SDK's ImageConfig typedoc:
  * the typedoc omits 4:5 and 5:4, which the models do accept (Google's own
  * multi-reference example passes "5:4").
  */
@@ -66,7 +66,7 @@ export const ASPECT_RATIOS = [
  *
  * Taken from the API's own rejection message, which is authoritative. The
  * prose docs describe the smallest size as "512px (0.5K)", but "0.5K" is
- * rejected — the literals it accepts are 512, 512P and 512PX.
+ * rejected; the literals it accepts are 512, 512P and 512PX.
  */
 export const IMAGE_SIZES = ["512", "512P", "512PX", "1K", "2K", "4K"] as const;
 
@@ -79,7 +79,7 @@ export interface ImageShapeOpts {
  * Build the `imageConfig` block for a generateContent image call.
  *
  * Returns undefined when neither flag is set, so the model's own defaults are
- * left alone. Invalid values exit rather than fall through — a typo'd aspect
+ * left alone. Invalid values exit rather than fall through: a typo'd aspect
  * ratio would otherwise be silently ignored and hand back a 1K square.
  */
 export function buildImageConfig(

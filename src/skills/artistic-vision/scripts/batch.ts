@@ -1,5 +1,5 @@
 /**
- * Imagen batch subcommand — run any subcommand across multiple files.
+ * Imagen batch subcommand: run any subcommand across multiple files.
  *
  * Resolves a glob pattern and applies the specified operation to each
  * file, with configurable concurrency for API operations.
@@ -112,7 +112,7 @@ export function registerBatch(program: Command): void {
           try {
             return await handler(file, args);
           } catch (e) {
-            log.warn(`Failed: ${file} — ${(e as Error).message}`);
+            log.warn(`Failed: ${file}: ${(e as Error).message}`);
             return { file, error: (e as Error).message };
           }
         });

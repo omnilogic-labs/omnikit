@@ -1,5 +1,5 @@
 /**
- * Imagen convert subcommand — convert image format using sharp.
+ * Imagen convert subcommand: convert image format using sharp.
  *
  * Quick format conversion between PNG, JPEG, WebP, and AVIF
  * without needing external tools. Detects target format from extension.

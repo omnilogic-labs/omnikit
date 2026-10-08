@@ -1,5 +1,5 @@
 /**
- * Imagen upscale subcommand — integer nearest-neighbor upscale.
+ * Imagen upscale subcommand: integer nearest-neighbor upscale.
  *
  * Shortcut for the common pattern of scaling pixel art, icons, or
  * low-res assets by an integer multiplier without blurring.

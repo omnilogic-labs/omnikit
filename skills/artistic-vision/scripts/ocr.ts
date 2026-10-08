@@ -1,5 +1,5 @@
 /**
- * Imagen ocr subcommand — extract text from images using Gemini.
+ * Imagen ocr subcommand: extract text from images using Gemini.
  *
  * Handles screenshots, UI mockups, documents, diagrams, handwriting,
  * code in images, photos of whiteboards, and more.

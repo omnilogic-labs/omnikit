@@ -1,5 +1,5 @@
 /**
- * Imagen describe subcommand — ask about or describe an image using Gemini.
+ * Imagen describe subcommand: ask about or describe an image using Gemini.
  *
  * Also exports describeImage() for use by --inspect flag and other subcommands.
  */
@@ -9,7 +9,7 @@ import { getGoogleAI, IMAGEN_MODEL, extractTextFromResponse, type Part } from ".
 import { log } from "./log";
 import { loadImageAsBase64 } from "./util";
 
-/** Core describe logic — reusable by other subcommands (e.g., --inspect flag). */
+/** Core describe logic, reusable by other subcommands (e.g., --inspect flag). */
 export async function describeImage(
   imagePath: string,
   question = "Describe this image in detail.",
