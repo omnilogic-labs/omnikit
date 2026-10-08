@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build, compile, diffClaudeTree, emitAgent } from "./build";
 import { HOSTS, HOST_NAMES, varsFor } from "./hosts";
+import { OS_NAMES, OS_TARGETS, type OsTarget } from "./os";
 import { filterFrontmatter, render, tomlString, type RenderError } from "./render";
 
 const FIX = join(import.meta.dir, "fixtures");
@@ -18,15 +19,15 @@ afterAll(async () => {
   for (const d of tmps) await rm(d, { recursive: true, force: true });
 });
 
-const r = (text: string, host = "claude") =>
-  render(text, host, varsFor(host as never), "t.md", HOST_NAMES);
-const ok = (text: string, host = "claude") => {
-  const res = r(text, host);
+const r = (text: string, host = "claude", os?: OsTarget) =>
+  render(text, { host, os, vars: varsFor(host as never), file: "t.md", hosts: HOST_NAMES });
+const ok = (text: string, host = "claude", os?: OsTarget) => {
+  const res = r(text, host, os);
   if (!res.ok) throw new Error(JSON.stringify(res.errors));
   return res.text;
 };
-const errs = (text: string, host = "claude") => {
-  const res = r(text, host);
+const errs = (text: string, host = "claude", os?: OsTarget) => {
+  const res = r(text, host, os);
   if (res.ok) throw new Error("expected an error");
   return res.errors;
 };
@@ -142,6 +143,161 @@ describe("errors name file and line", () => {
     expect(stderr).toContain(join(FIX, "bad-var/skills/bad/SKILL.md") + ":9:");
     expect(stderr).toContain("unknown var {{nope}}");
     expect(await stat(join(out, "plugins")).catch(() => null)).toBeNull();
+  });
+});
+
+describe("OS axis", () => {
+  const block = (cond: string, body = "body") =>
+    `top\n<!-- @if ${cond} -->\n${body}\n<!-- @endif -->\nbottom\n`;
+
+  test("each single OS keeps its own block only", () => {
+    for (const os of OS_NAMES) {
+      const src = OS_NAMES.map((o) => `<!-- @if ${o} -->\n${o}\n<!-- @endif -->\n`).join("");
+      expect(ok(src, "claude", os)).toBe(`${os}\n`);
+    }
+  });
+
+  test("@if linux,wsl", () => {
+    const src = block("linux,wsl");
+    expect(ok(src, "claude", "linux")).toBe("top\nbody\nbottom\n");
+    expect(ok(src, "claude", "wsl")).toBe("top\nbody\nbottom\n");
+    expect(ok(src, "claude", "macos")).toBe("top\nbottom\n");
+    expect(ok(src, "claude", "windows")).toBe("top\nbottom\n");
+    expect(ok(block("linux , wsl"), "claude", "wsl")).toBe("top\nbody\nbottom\n");
+  });
+
+  test("combined host and OS block, in either order", () => {
+    for (const cond of ["codex windows", "windows codex"]) {
+      const src = block(cond);
+      expect(ok(src, "codex", "windows")).toBe("top\nbody\nbottom\n");
+      expect(ok(src, "codex", "linux")).toBe("top\nbottom\n");
+      expect(ok(src, "agy", "windows")).toBe("top\nbottom\n");
+    }
+    expect(ok(block("codex,agy windows"), "agy", "windows")).toBe("top\nbody\nbottom\n");
+  });
+
+  test("any-OS keeps OS blocks under a label line", () => {
+    expect(ok(block("windows"), "claude", "any")).toBe(
+      "top\nOn Windows (Git Bash):\nbody\nbottom\n"
+    );
+    expect(ok(block("linux,wsl"), "claude", "any")).toBe("top\nOn Linux and WSL:\nbody\nbottom\n");
+    expect(ok(block("linux,wsl,macos"))).toBe("top\nOn Linux, WSL and macOS:\nbody\nbottom\n");
+    expect(ok(block("  claude"), "claude", "any")).toBe("top\nbody\nbottom\n");
+    expect(ok(block("codex windows"), "claude", "any")).toBe("top\nbottom\n");
+    expect(ok("  <!-- @if macos -->\r\n  x\r\n  <!-- @endif -->\r\n", "claude", "any")).toBe(
+      "  On macOS:\r\n  x\r\n"
+    );
+  });
+
+  test("{{os.shell}} resolves per OS", () => {
+    expect(ok("{{os.shell}}", "claude", "linux")).toBe("bash");
+    expect(ok("{{os.shell}}", "claude", "macos")).toBe("zsh");
+    expect(ok("{{os.shell}} {{os.name}}", "codex", "windows")).toBe("Git Bash Windows");
+    expect(ok(block("windows", "{{os.shell}}"), "claude", "any")).toBe(
+      "top\nOn Windows (Git Bash):\nGit Bash\nbottom\n"
+    );
+    expect(ok(block("macos", "{{os.shell}}"), "claude", "linux")).toBe("top\nbottom\n");
+  });
+
+  test("{{os.shell}} outside an OS block fails under any", () => {
+    const e = errs("x\n{{os.shell}}\n", "claude", "any");
+    expect(e[0]).toMatchObject({ file: "t.md", line: 2 });
+    expect(e[0].message).toContain("outside an OS block");
+    expect(errs(block("claude", "{{os.shell}}"), "claude", "any")[0].message).toContain(
+      "outside an OS block"
+    );
+  });
+
+  test("{{os.shell}} in a two-OS block fails under any", () => {
+    const e = errs(block("linux,wsl", "{{os.shell}}"), "claude", "any");
+    expect(e[0]).toMatchObject({ line: 3 });
+    expect(e[0].message).toContain("more than one OS");
+  });
+
+  test("unknown {{os.*}} key fails", () => {
+    expect(errs("{{os.nope}}", "claude", "linux")[0].message).toContain("unknown var {{os.nope}}");
+  });
+
+  test("sources without OS blocks render the same for every OS", async () => {
+    const real = await readFile(join(FIX, "src/skills/demo/references/plain.md"), "utf8");
+    for (const os of OS_TARGETS) expect(ok(real, "codex", os)).toBe(real);
+  });
+});
+
+describe("OS directive errors name file and line", () => {
+  const cases: [string, string][] = [
+    ["beos", 'unknown host or OS "beos"'],
+    ["linux,beos", 'unknown OS "beos"'],
+    ["codex,windows", "mixes hosts and OSes"],
+    ["codex agy", "two host lists"],
+    ["linux windows", "two OS lists"],
+    ["codex windows linux", "at most two lists"],
+  ];
+  for (const [cond, msg] of cases) {
+    test(`@if ${cond}`, () => {
+      for (const os of OS_TARGETS) {
+        const e = errs(`x\n<!-- @if ${cond} -->\ny\n<!-- @endif -->\n`, "codex", os);
+        expect(e[0]).toMatchObject({ file: "t.md", line: 2 });
+        expect(e[0].message).toContain(msg);
+      }
+    });
+  }
+});
+
+describe("--os", () => {
+  const fixtureOs = "skills/demo/references/os.md";
+  const body = "Run the helper from";
+
+  test("dist trees follow --os, the Claude tree stays any-OS, and .os records it", async () => {
+    for (const os of ["linux", "windows", "any"] as OsTarget[]) {
+      const out = await tmp();
+      expect(await build(join(FIX, "src"), out, os)).toEqual([]);
+      const claude = await readFile(join(out, "plugins/omnilogic-labs", fixtureOs), "utf8");
+      expect(claude).toContain("On Windows (Git Bash):\n\nRun the helper from Git Bash");
+      for (const h of ["codex", "agy"]) {
+        const dist = await readFile(join(out, "dist", h, fixtureOs), "utf8");
+        expect(await readFile(join(out, "dist", h, ".os"), "utf8")).toBe(`${os}\n`);
+        if (os === "linux") expect(dist).not.toContain(body);
+        if (os === "windows") {
+          expect(dist).toContain(`${body} Git Bash`);
+          expect(dist).not.toContain("On Windows");
+        }
+        if (os === "any") expect(dist).toBe(claude);
+      }
+      expect(await stat(join(out, "plugins/omnilogic-labs/.os")).catch(() => null)).toBeNull();
+    }
+  });
+
+  test("an unknown --os exits non-zero naming the allowed values", async () => {
+    const p = Bun.spawnSync([
+      "bun",
+      BUILD,
+      "--src",
+      join(FIX, "src"),
+      "--out",
+      await tmp(),
+      "--os",
+      "beos",
+    ]);
+    expect(p.exitCode).not.toBe(0);
+    expect(p.stderr.toString()).toContain("linux, wsl, macos, windows, any");
+  });
+
+  test("--check compares only the committed tree, whatever --os is", async () => {
+    const out = await tmp();
+    expect(await build(join(FIX, "src"), out, "linux")).toEqual([]);
+    const p = Bun.spawnSync([
+      "bun",
+      BUILD,
+      "--src",
+      join(FIX, "src"),
+      "--out",
+      out,
+      "--os",
+      "windows",
+      "--check",
+    ]);
+    expect(p.exitCode).toBe(0);
   });
 });
 
