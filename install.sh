@@ -1,47 +1,62 @@
 #!/bin/bash
-# Install every skill, agent, and command in this repo into the agent tools on
-# this machine. Everything is installed as a symlink back into this clone, so
-# editing a file here changes the live version immediately: no re-install step,
-# and no copies that drift from the source.
+# Install the omnilogic-labs skills into the agent tools on this machine.
 #
-# Safe to re-run. Status goes to stderr.
+#   Claude Code   installs the omnilogic-labs plugin from this clone's
+#                 marketplace (omnikit), and removes the per-skill symlinks
+#                 that older versions of this script created.
+#   Codex, agy    get one symlink per skill in ~/.agents/skills, pointing back
+#                 into this clone, so an edit here is live immediately.
+#   Gemini CLI    links this clone as an extension.
+#
+# Safe to re-run. Status goes to stderr. Machine output (--check findings and
+# --dry-run commands) goes to stdout.
 set -e
 
-REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")" && pwd -P)"
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 CODEX_SKILLS_DIR="${CODEX_HOME:-$HOME/.codex}/skills"
+AGENTS_SKILLS_DIR="$HOME/.agents/skills"
+SKILLS_SRC="$REPO_ROOT/plugins/omnilogic-labs/skills"
+MARKETPLACE="omnikit"
+PLUGIN="omnilogic-labs"
+PLUGIN_ID="$PLUGIN@$MARKETPLACE"
 
 DO_CLAUDE=false
-DO_CODEX=false
+DO_AGENTS=false
 DO_GEMINI=false
 TARGETED=false
 DEPS=true
 BROWSER=false
 DRY_RUN=false
+CHECK=false
 FORCE=false
 
 n_link=0
 n_ok=0
 n_prune=0
 n_conflict=0
+n_problem=0
 
 usage() {
   cat >&2 << 'USAGE'
 Usage: bash install.sh [options]
 
-Links this repo's skills, agents, and commands into the agent tools on this
-machine. Edits to files in the repo take effect immediately.
+Installs this repo's skills into the agent tools on this machine.
 
 Targets (default: every tool found on PATH):
-  --claude          Claude Code only (skills, agents, commands)
-  --codex           Codex CLI only (skills)
-  --gemini          Gemini CLI only (extension)
+  --claude          Claude Code: install the omnilogic-labs plugin from the
+                    omnikit marketplace in this clone, remove legacy links
+  --agents          Codex and agy: link each skill into ~/.agents/skills
+                    (--codex is an alias)
+  --gemini          Gemini CLI: link this clone as an extension
 
 Options:
+  --check           report missing, stale, and legacy links; change nothing;
+                    exit 1 if any are found
+  -n, --dry-run     print the external commands that would run, change nothing
   --no-deps         skip "bun install"
   --browser         also run setup-browser-buddy.sh (downloads Chrome)
   --force           move aside a real file or directory blocking a link
-  -n, --dry-run     report what would change, change nothing
   -h, --help        this message
 USAGE
 }
@@ -51,8 +66,9 @@ say() { echo "$*" >&2; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --claude) DO_CLAUDE=true && TARGETED=true ;;
-    --codex) DO_CODEX=true && TARGETED=true ;;
+    --agents | --codex) DO_AGENTS=true && TARGETED=true ;;
     --gemini) DO_GEMINI=true && TARGETED=true ;;
+    --check) CHECK=true ;;
     --no-deps) DEPS=false ;;
     --deps) DEPS=true ;;
     --browser) BROWSER=true ;;
@@ -71,11 +87,62 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+has() { command -v "$1" > /dev/null 2>&1; }
+
 if ! $TARGETED; then
-  command -v claude > /dev/null 2>&1 && DO_CLAUDE=true
-  command -v codex > /dev/null 2>&1 && DO_CODEX=true
-  command -v gemini > /dev/null 2>&1 && DO_GEMINI=true
+  has claude && DO_CLAUDE=true
+  if has codex || has agy || [ -d "$AGENTS_SKILLS_DIR" ]; then DO_AGENTS=true; fi
+  has gemini && DO_GEMINI=true
 fi
+
+# --check never writes, so it also never runs an external command.
+if $CHECK; then
+  DRY_RUN=true
+  DEPS=false
+  BROWSER=false
+fi
+
+# Directories whose links count as "ours". When this script runs from a git
+# worktree, links into the main clone count too.
+REPO_ROOTS=("$REPO_ROOT")
+if has git; then
+  common="$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-common-dir 2> /dev/null || true)"
+  if [ -n "$common" ]; then
+    main_root="$(cd "$common/.." 2> /dev/null && pwd -P || true)"
+    if [ -n "$main_root" ] && [ "$main_root" != "$REPO_ROOT" ]; then
+      REPO_ROOTS+=("$main_root")
+    fi
+  fi
+fi
+
+# into_repo <path>: true when the symlink <path> resolves into a repo root,
+# even if its target no longer exists.
+into_repo() {
+  local resolved root
+  resolved="$(readlink -m "$1")"
+  for root in "${REPO_ROOTS[@]}"; do
+    case "$resolved" in "$root" | "$root"/*) return 0 ;; esac
+  done
+  return 1
+}
+
+# problem <kind> <path>: one --check finding, as TSV on stdout.
+problem() {
+  printf '%s\t%s\n' "$1" "$2"
+  n_problem=$((n_problem + 1))
+}
+
+# run <cmd> [args...]: runs an external command with its output on stderr, or
+# under --dry-run prints the command on stdout instead.
+run() {
+  local line
+  if $DRY_RUN; then
+    line="$(printf '%q ' "$@")"
+    echo "${line% }"
+    return 0
+  fi
+  "$@" >&2
+}
 
 # link_into <target-dir> <source-path> <link-name>
 #
@@ -89,15 +156,19 @@ link_into() {
   if [ -L "$dst" ]; then
     current="$(readlink "$dst")"
     if [ "$current" = "$src" ]; then
-      say "  ok       $name"
       n_ok=$((n_ok + 1))
       return 0
     fi
-    case "$(cd "$dir" && readlink -m "$name")" in
-      "$REPO_ROOT"/*) ;;
-      *) say "  replace  $name (was -> $current)" ;;
-    esac
+    if $CHECK; then
+      problem stale "$dst"
+      return 0
+    fi
+    say "  replace  $name (was -> $current)"
   elif [ -e "$dst" ]; then
+    if $CHECK; then
+      problem conflict "$dst"
+      return 0
+    fi
     if $FORCE; then
       backup="$dst.replaced-$(date +%Y%m%d%H%M%S)"
       $DRY_RUN || mv "$dst" "$backup"
@@ -107,6 +178,9 @@ link_into() {
       n_conflict=$((n_conflict + 1))
       return 0
     fi
+  elif $CHECK; then
+    problem missing "$dst"
+    return 0
   fi
 
   $DRY_RUN || ln -sfn "$src" "$dst"
@@ -114,56 +188,37 @@ link_into() {
   n_link=$((n_link + 1))
 }
 
-# prune_dir <target-dir> <name>...
+# prune_dir <kind> <target-dir> [keep-name...]
 #
-# Removes symlinks in <target-dir> that point into this repo but are not in the
-# list of names we just installed: skills that were renamed, deleted, or moved
-# to another plugin. Links pointing anywhere else are left alone.
+# Removes symlinks in <target-dir> that point into this repo and are not in the
+# keep list. Links pointing anywhere else are left alone. Under --check each
+# one is reported as <kind> instead.
 prune_dir() {
-  local dir="$1"
-  shift
-  local keep=" $* " entry name resolved
+  local kind="$1" dir="$2"
+  shift 2
+  local keep=" $* " entry name
 
   [ -d "$dir" ] || return 0
 
-  for entry in "$dir"/*; do
+  for entry in "$dir"/* "$dir"/.[!.]*; do
     [ -L "$entry" ] || continue
     name="$(basename "$entry")"
     case "$keep" in *" $name "*) continue ;; esac
-    resolved="$(cd "$dir" && readlink -m "$name")"
-    case "$resolved" in "$REPO_ROOT"/*) ;; *) continue ;; esac
+    into_repo "$entry" || continue
+    if $CHECK; then
+      problem "$kind" "$entry"
+      continue
+    fi
     $DRY_RUN || rm -f "$entry"
-    say "  prune    $name (stale link into the repo)"
+    say "  prune    $entry ($kind link into the repo)"
     n_prune=$((n_prune + 1))
   done
 }
 
-# Reads the "name:" field from a markdown file's YAML frontmatter. Agents are
-# registered under that name, not their filename, so the symlink uses it too:
-# a generic delegate.md in a shared agents directory collides with everything.
-frontmatter_name() {
-  local value
-  value="$(awk '
-    NR == 1 && $0 != "---" { exit }
-    NR > 1 {
-      if ($0 == "---") exit
-      if ($1 == "name:") { print $2; exit }
-    }
-  ' "$1")"
-  if [ -n "$value" ]; then
-    echo "$value"
-  else
-    basename "$1" .md
-  fi
-}
+skill_dirs() { find "$SKILLS_SRC" -mindepth 1 -maxdepth 1 -type d | sort; }
 
-skill_dirs() { find "$REPO_ROOT/plugins" -mindepth 3 -maxdepth 3 -type d -path '*/skills/*' | sort; }
-agent_files() { find "$REPO_ROOT/plugins" -mindepth 3 -maxdepth 3 -type f -path '*/agents/*.md' | sort; }
-command_files() { find "$REPO_ROOT/plugins" -mindepth 3 -maxdepth 3 -type f -path '*/commands/*.md' | sort; }
-
-# The flat skills/ directory at the repo root is how Codex, Gemini, and the
-# `npx skills` installer discover skills whose canonical home is plugins/*.
-# It is generated, not hand-maintained, so a new plugin never gets forgotten.
+# The flat skills/ directory at the repo root is how Gemini and the
+# `npx skills` installer discover the skills. It is generated, never edited.
 sync_repo_skills() {
   local dir="$REPO_ROOT/skills" names=() src name
   say ""
@@ -176,77 +231,93 @@ sync_repo_skills() {
     link_into "$dir" "../${src#"$REPO_ROOT"/}" "$name"
   done < <(skill_dirs)
 
-  prune_dir "$dir" "${names[@]}"
+  prune_dir stale "$dir" "${names[@]}"
+}
+
+# Claude Code installs the plugin through the marketplace, so every per-skill,
+# per-agent, and per-command link from older installs has to go, or each skill
+# would load twice.
+remove_claude_legacy() {
+  local sub
+  for sub in skills agents commands; do
+    prune_dir legacy "$CLAUDE_DIR/$sub"
+  done
 }
 
 install_claude() {
-  local names=() src name
+  local plugins marketplaces id
   say ""
   say "Claude Code ($CLAUDE_DIR)"
+  remove_claude_legacy
+  $CHECK && return 0
 
-  $DRY_RUN || mkdir -p "$CLAUDE_DIR/skills" "$CLAUDE_DIR/agents" "$CLAUDE_DIR/commands"
+  if ! has claude; then
+    say "  claude not on PATH. Install it, then run: bash install.sh --claude"
+    if ! $DRY_RUN; then return 0; fi
+  fi
 
-  say " skills"
-  names=()
-  while IFS= read -r src; do
-    name="$(basename "$src")"
-    names+=("$name")
-    link_into "$CLAUDE_DIR/skills" "$src" "$name"
-  done < <(skill_dirs)
-  prune_dir "$CLAUDE_DIR/skills" "${names[@]}"
+  plugins=""
+  marketplaces=""
+  if has claude; then
+    plugins="$(claude plugin list --json 2> /dev/null || true)"
+    marketplaces="$(claude plugin marketplace list --json 2> /dev/null || true)"
+  fi
 
-  say " agents"
-  names=()
-  while IFS= read -r src; do
-    name="$(frontmatter_name "$src").md"
-    names+=("$name")
-    link_into "$CLAUDE_DIR/agents" "$src" "$name"
-  done < <(agent_files)
-  prune_dir "$CLAUDE_DIR/agents" "${names[@]}"
+  if grep -Eq "\"name\": *\"$MARKETPLACE\"" <<< "$marketplaces"; then
+    run claude plugin marketplace update "$MARKETPLACE"
+  else
+    run claude plugin marketplace add "$REPO_ROOT"
+  fi
 
-  say " commands"
-  names=()
-  while IFS= read -r src; do
-    name="$(basename "$src")"
-    names+=("$name")
-    link_into "$CLAUDE_DIR/commands" "$src" "$name"
-  done < <(command_files)
-  prune_dir "$CLAUDE_DIR/commands" "${names[@]}"
+  # Plugins from earlier versions of this marketplace (one per skill group).
+  while IFS= read -r id; do
+    [ -n "$id" ] && [ "$id" != "$PLUGIN_ID" ] || continue
+    run claude plugin uninstall "$id"
+  done < <(grep -Eo "\"id\": *\"[^\"]+@$MARKETPLACE\"" <<< "$plugins" | sed -E 's/.*"([^"]+)"$/\1/')
+
+  if grep -Eq "\"id\": *\"$PLUGIN_ID\"" <<< "$plugins"; then
+    run claude plugin update "$PLUGIN_ID"
+  else
+    run claude plugin install "$PLUGIN_ID"
+  fi
 }
 
-install_codex() {
+install_agents() {
   local names=() src name
   say ""
-  say "Codex CLI ($CODEX_SKILLS_DIR)"
-  $DRY_RUN || mkdir -p "$CODEX_SKILLS_DIR"
+  say "Codex and agy ($AGENTS_SKILLS_DIR)"
+  $DRY_RUN || mkdir -p "$AGENTS_SKILLS_DIR"
 
   while IFS= read -r src; do
     name="$(basename "$src")"
     names+=("$name")
-    link_into "$CODEX_SKILLS_DIR" "$src" "$name"
+    link_into "$AGENTS_SKILLS_DIR" "$src" "$name"
   done < <(skill_dirs)
+  prune_dir stale "$AGENTS_SKILLS_DIR" "${names[@]}"
 
-  prune_dir "$CODEX_SKILLS_DIR" "${names[@]}"
+  # Codex reads ~/.agents/skills now; older installs linked here as well.
+  prune_dir legacy "$CODEX_SKILLS_DIR"
 }
 
 install_gemini() {
   say ""
   say "Gemini CLI"
+  $CHECK && return 0
 
-  if ! command -v gemini > /dev/null 2>&1; then
+  if ! has gemini; then
     say "  gemini not on PATH. Install it, then run: bash install.sh --gemini"
-    return 0
+    if ! $DRY_RUN; then return 0; fi
   fi
 
   if $DRY_RUN; then
-    say "  would run: gemini extensions link ."
+    run gemini extensions link .
     return 0
   fi
 
   if (cd "$REPO_ROOT" && gemini extensions link .) >&2; then
     say "  linked this clone as an extension; edits are live"
   else
-    say "  extension link failed, falling back to per-skill links" >&2
+    say "  extension link failed, falling back to per-skill links"
     local src
     while IFS= read -r src; do
       gemini skills link "$src" >&2 || say "  skip $(basename "$src")"
@@ -257,36 +328,62 @@ install_gemini() {
 say "Omnikit Installer"
 say "================="
 say "Source: $REPO_ROOT"
-$DRY_RUN && say "Mode:   dry run, nothing will be written"
+if $CHECK; then
+  say "Mode:   check, nothing will be written"
+elif $DRY_RUN; then
+  say "Mode:   dry run, nothing will be written"
+fi
+
+if [ ! -d "$SKILLS_SRC" ]; then
+  say "error: $SKILLS_SRC not found"
+  exit 1
+fi
 
 if $DEPS; then
-  if command -v bun > /dev/null 2>&1; then
-    say ""
+  say ""
+  if has bun; then
     say "Installing workspace dependencies (bun install)"
-    $DRY_RUN || (cd "$REPO_ROOT" && bun install >&2)
+    if $DRY_RUN; then
+      run bun install
+    else
+      (cd "$REPO_ROOT" && bun install >&2)
+    fi
   else
-    say ""
     say "bun not found. Install it from https://bun.sh, then re-run so the"
-    say "artistic-vision and browser-buddy skills get their dependencies."
+    say "artistic-vision and agent-browser skills get their dependencies."
   fi
 fi
 
 sync_repo_skills
 
 $DO_CLAUDE && install_claude
-$DO_CODEX && install_codex
+$DO_AGENTS && install_agents
 $DO_GEMINI && install_gemini
 
-if ! $DO_CLAUDE && ! $DO_CODEX && ! $DO_GEMINI; then
+if $CHECK; then
   say ""
-  say "No supported agent tools found on PATH (claude, codex, gemini)."
-  say "Install one and re-run, or force a target: bash install.sh --claude"
+  if [ "$n_problem" -gt 0 ]; then
+    say "Found $n_problem problem(s). Fix them with: bash install.sh"
+    exit 1
+  fi
+  say "All links current ($n_ok checked)"
+  exit 0
+fi
+
+if ! $DO_CLAUDE && ! $DO_AGENTS && ! $DO_GEMINI; then
+  say ""
+  say "No supported agent tools found on PATH (claude, codex, agy, gemini)."
+  say "Install one and re-run, or force a target: bash install.sh --agents"
 fi
 
 if $BROWSER; then
   say ""
   say "Running setup-browser-buddy.sh"
-  $DRY_RUN || bash "$REPO_ROOT/setup-browser-buddy.sh"
+  if $DRY_RUN; then
+    run bash "$REPO_ROOT/setup-browser-buddy.sh"
+  else
+    bash "$REPO_ROOT/setup-browser-buddy.sh"
+  fi
 fi
 
 say ""
@@ -299,12 +396,13 @@ if [ "$n_conflict" -gt 0 ]; then
   say "script move them aside."
 fi
 
-if ! $BROWSER && ! command -v agent-browser > /dev/null 2>&1; then
+if ! $BROWSER && ! has agent-browser; then
   say ""
   say "The agent-browser skill needs its CLI: bash install.sh --browser"
 fi
 
-say ""
-say "Everything above is a symlink into $REPO_ROOT."
-say "Edit a skill there and the change is live. Restart running sessions to"
-say "pick up new or renamed skills, agents, and commands."
+if $DO_CLAUDE && ! $DRY_RUN; then
+  say ""
+  say "Claude Code runs a cached copy of the plugin. After editing a skill,"
+  say "re-run: bash install.sh --claude"
+fi

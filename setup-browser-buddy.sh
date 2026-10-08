@@ -1,11 +1,11 @@
 #!/bin/bash
-# Bootstrap the browser-buddy plugin: vendor the agent-browser binary, download
+# Bootstrap the agent-browser skill: vendor the agent-browser binary, download
 # Chrome for Testing, and put `agent-browser` on your PATH so it runs from any
 # directory. Safe to re-run; status goes to stderr.
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
-WRAPPER="$REPO_ROOT/plugins/browser-buddy/bin/agent-browser"
+WRAPPER="$REPO_ROOT/plugins/omnilogic-labs/bin/agent-browser"
 BIN_DIR="$HOME/.local/bin"
 LINK="$BIN_DIR/agent-browser"
 
