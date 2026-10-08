@@ -25,6 +25,9 @@
     "budget": "bash scripts/skill-stats.sh",
     "verify": "bash scripts/verify-install.sh",
     "verify:ask": "bash scripts/verify-install.sh --ask",
+    "build": "bun scripts/build/build.ts",
+    "build:check": "bun scripts/build/build.ts --check",
+    "test": "bun test scripts/build",
     "check": "prettier --check . && claude plugin validate --strict . && claude plugin validate --strict plugins/omnilogic-labs"
   },
   "devDependencies": {
