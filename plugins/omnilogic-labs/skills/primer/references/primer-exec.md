@@ -1,5 +1,7 @@
 # primer-exec: the vendored task runner
 
+Contents: Running it; Options; What it does per task; Output contract; Build / typecheck auto-detection; Bugs this runner deliberately fixes.
+
 `primer-exec` is a single TypeScript file shipped with this skill at
 `bin/primer-exec.ts`. It is the standalone, sequential, dependency-ordered task
 runner. It replaces the per-project `run-tasks.ts` / `run-tasks.sh` scripts that

@@ -1,5 +1,7 @@
 # Rewrites
 
+Contents: 1. The claim arrives last; 2. Invented vocabulary; 3. Abstraction instead of measurement; 4. The em dash aside; 5. Contrast the reader did not ask for; 6. One sentence doing four jobs; 7. Hedging that hides the confidence; 8. Inanimate subjects; 9. Context the reader does not have; 10. A heading that asks instead of tells; 11. The closing line that repeats the section; 12. Compression that only the author can undo; A whole paragraph.
+
 Before and after pairs, with the reason for each change. The "before" versions
 are all grammatical and fluent. That is the point: the problem is rarely bad
 grammar, it is a sentence built to sound good rather than to be understood.

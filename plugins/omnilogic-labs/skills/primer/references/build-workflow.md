@@ -1,4 +1,8 @@
-# The dynamic build workflow
+# The dynamic build workflow (Claude Code)
+
+Contents: What the workflow must do; Why an integration agent; Template; Notes; claude -p versus the dynamic workflow.
+
+This runner needs the Claude Code Workflow tool. On any other host, or for a strictly sequential build, use `primer-exec` (`references/primer-exec.md`).
 
 This is the default runner. It is a JavaScript Workflow script, generated into
 the target repo as `scripts/primer-build.workflow.js` and run with the **Workflow
@@ -21,19 +25,19 @@ the vendored `primer-exec` runner instead (see `references/primer-exec.md`).
 3. **Execute level by level (barrier between levels).** Each parallel group runs
    as `parallel()` of worktree-isolated agents. Then one integration agent lands
    the worktrees onto the build branch, re-runs the gates, mints the markers, and
-   appends shared context to `CLAUDE.md`.
+   appends shared context to `AGENTS.md`.
 4. **Fail safe.** On a gate failure or merge conflict, log it and stop for human
    review (or re-run the single offending task sequentially).
 
 ## Why an integration agent
 
 Parallel agents each work in their own worktree off the same base, so they
-cannot see each other's commits or each other's `CLAUDE.md` edits. The
+cannot see each other's commits or each other's `AGENTS.md` edits. The
 integration agent is the barrier where the level's work is serialized back
 together: it lands each worktree in turn, runs the four gates once on the
 combined tree, writes the marker commits, and makes the level's new shared
-context visible to the next level by appending to `CLAUDE.md`. Keep all
-`CLAUDE.md` edits in the integration step, never inside the parallel task agents.
+context visible to the next level by appending to `AGENTS.md`. Keep all
+`AGENTS.md` edits in the integration step, never inside the parallel task agents.
 
 ## Template
 
@@ -83,7 +87,7 @@ const GATE_SCHEMA = {
   },
 }
 
-const HARD_RULES = `You are executing one task from docs/init/. Read CLAUDE.md and docs/init.md first for project context and global rules. Then do exactly this task, run its acceptance command yourself, and commit your own work with a short imperative subject. Committing is mandatory: when the work is done you MUST \`git add -A && git commit\`. Uncommitted work cannot be landed and will be treated as a failed task. Do NOT write the [task-complete] marker; the runner does that. Look up library versions and docs via the context7 MCP; never pin from memory. No em dashes or en dashes. Do not run a long-lived foreground command (no dev server in the foreground); background it, capture the PID, check, then kill it.`
+const HARD_RULES = `You are executing one task from docs/init/. Read AGENTS.md and docs/init.md first for project context and global rules. Then do exactly this task, run its acceptance command yourself, and commit your own work with a short imperative subject. Committing is mandatory: when the work is done you MUST \`git add -A && git commit\`. Uncommitted work cannot be landed and will be treated as a failed task. Do NOT write the [task-complete] marker; the runner does that. Look up library versions and docs via the context7 MCP; never pin from memory. No em dashes or en dashes. Do not run a long-lived foreground command (no dev server in the foreground); background it, capture the PID, check, then kill it.`
 
 // 1. Plan
 phase('Plan')
@@ -132,13 +136,13 @@ for (let i = 0; i < levels.length; i++) {
         { label: `build:${t.slug}`, phase: 'Build', isolation: 'worktree' }),
     ))
 
-    // integration barrier: land, gate, mint markers, update CLAUDE.md
+    // integration barrier: land, gate, mint markers, update AGENTS.md
     const gate = await agent(
       `Integrate the just-completed tasks [${group.map((t) => t.slug).join(', ')}] onto the build branch. ` +
       `For each task's worktree: FIRST, if it has uncommitted changes, stage and commit them (the worktree is isolated to this one task, so \`git add -A && git commit\` is safe and never loses work); a task whose worktree has no commits at all is a failure, record it in failures. THEN land its commits (cherry-pick or merge), resolve trivially or report a conflict. ` +
       `Then on the combined tree run the gates once: (1) git status --porcelain empty, (2) the project build command, ` +
       `(3) each task's acceptance command, (4) the typecheck. If all pass, write one empty commit per task with subject ` +
-      `"[task-complete] <slug>", and append any new shared patterns to CLAUDE.md. Return pass, the slugs you landed, and any failures.`,
+      `"[task-complete] <slug>", and append any new shared patterns to AGENTS.md. Return pass, the slugs you landed, and any failures.`,
       { label: `integrate:L${i}`, phase: 'Integrate', schema: GATE_SCHEMA },
     )
     results.push(gate)
@@ -165,3 +169,11 @@ return { done: true, levels: levels.length, results }
 - Worktree isolation is the expensive part; it is justified only because the
   parallel agents mutate files concurrently. A strictly sequential build does
   not need it and should use `primer-exec` instead.
+
+## claude -p versus the dynamic workflow
+
+The older convention ran one isolated `claude -p` per task from a bash loop, with git commit markers for idempotency and inline gates. The workflow keeps all of that and adds parallel task groups, structured gate results, a budget ceiling, in-session resume and a live progress view.
+
+A Workflow script is pure JS with no shell, git or filesystem access. Reading task files and running gates (`bun run build`, `tsc`, `git status`, the marker commit) must be done by subagents that return structured results. The template does this.
+
+For a strictly sequential dependent build the workflow is mostly a nicer orchestrator than a loop. The win comes from parallel-safe task groups, fan-out research and per-task verification.

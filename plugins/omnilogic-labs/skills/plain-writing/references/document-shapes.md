@@ -1,5 +1,7 @@
 # Document shapes
 
+Contents: Findings or gap report; Words used in this file; How this was checked; What works; Where it falls short; What nobody has measured; Questions this leaves open; Status update; Decision record; What we decided; Why; What we gave up; What would make us revisit this; Bug report; Commit message; Pull request description; What this does; Why; How to check it; Anything a reviewer should know; README opening; Answering a question in chat.
+
 Skeletons for the documents that come up most often. Each one exists so that a
 reader can find what they need without reading everything, and so that two
 documents of the same kind look the same.

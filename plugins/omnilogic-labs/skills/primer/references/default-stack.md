@@ -60,7 +60,7 @@ For a typical web product the default is a TypeScript full-stack app:
   memory. Use context7 for current docs.
 - Secrets live in environment variables, never committed. `.env.local` is
   gitignored.
-- The first task creates `CLAUDE.md`; later tasks append established patterns to
+- The first task creates `AGENTS.md`; later tasks append established patterns to
   it so context flows between isolated task invocations.
 
 ## Overriding

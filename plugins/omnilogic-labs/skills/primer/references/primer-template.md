@@ -1,5 +1,7 @@
 # Primer template
 
+Contents: Skeleton; Your job (read this first); What we are building; Who this is for; Hard constraints; Architecture overview; Reference UX / design direction; External sources to read; Phases; Judgment calls; AGENTS.md; What not to do; Notes on writing a good primer.
+
 A primer is a single Markdown file at the target repo root, written for a fresh
 Claude Code session as its primary reader and the human as secondary reader. It
 is self-contained: everything needed to understand and plan the build lives in
@@ -100,9 +102,9 @@ during research. Do not guess these in code.>
 
 - <Decision>: proposed <answer>, because <reason>.
 
-## CLAUDE.md
+## AGENTS.md
 
-The first task must create `CLAUDE.md` at the repo root: project overview,
+The first task must create `AGENTS.md` at the repo root (and a `CLAUDE.md` containing only `@AGENTS.md`, so Claude Code reads the same file): project overview,
 architecture, dependency graph, build and test commands, stack, conventions,
 what not to do. Every later task invocation reads it automatically. Later tasks
 append to it as they establish new patterns; that is how context flows between

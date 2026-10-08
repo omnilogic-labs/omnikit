@@ -1,5 +1,7 @@
 # Task file format
 
+Contents: docs/init.md; docs/init/NN-slug.md; Goal; What to do; Acceptance; Notes; Granularity guidance; Worked example: a small dependency graph.
+
 The primer is decomposed into `docs/init.md` (the index and global rules) and a
 set of `docs/init/NN-slug.md` files (one per task). The build runner consumes
 these, so the frontmatter and structure below are a contract, not a suggestion.
@@ -15,9 +17,9 @@ The index. Contains:
   (look up versions and docs via context7; never pin from memory), and the four
   verification gates the runner applies after each task:
   1. `git status --porcelain` is empty (the task committed its own work).
-  2. The build command exits 0 (for example `npm run build`).
+  2. The build command exits 0 (for example `bun run build`).
   3. The task's acceptance command exits 0.
-  4. The typecheck exits 0 (for example `npx tsc --noEmit`).
+  4. The typecheck exits 0 (for example `bunx tsc --noEmit`).
 - The commit convention: short imperative subject scoped to the task. The runner
   mints the `[task-complete] NN-slug` marker; the task does not mint it itself.
 
@@ -33,7 +35,7 @@ task's identity in dependency lists and marker commits.
 ---
 deps: [01-repo-init]                      # slugs (with or without NN) that must land first; [] if none
 touches: [src/db/**, drizzle/**]          # the file globs this task creates or edits
-acceptance: "npx tsc --noEmit && npm run build"   # the command that proves the task is done
+acceptance: "bunx tsc --noEmit && bun run build"   # the command that proves the task is done
 parallelizable: true                       # optional; default true. false pins it to run alone in its level
 ---
 ```
@@ -44,7 +46,7 @@ parallelizable: true                       # optional; default true. false pins 
   level whose `touches` globs do not overlap are safe to run in parallel. Be
   honest and slightly generous here: an undeclared write is what causes a merge
   conflict at integration. If a task touches shared cross-cutting files (root
-  config, `CLAUDE.md`, a shared types file), list them, which will correctly
+  config, `AGENTS.md`, a shared types file), list them, which will correctly
   serialize it against its siblings.
 - **`acceptance`** is a single shell command (it may be a `&&` chain) that exits
   0 only when the task is genuinely complete. Keep it specific to this task, not
@@ -65,7 +67,7 @@ parallelizable: true                       # optional; default true. false pins 
 ## What to do
 
 <Concrete steps or requirements. Name the files to create or edit. Reference the
-patterns established by prior tasks (which are in CLAUDE.md by now).>
+patterns established by prior tasks (which are in AGENTS.md by now).>
 
 ## Acceptance
 
@@ -74,7 +76,7 @@ runner extracts the command from frontmatter; this block is for the human and as
 a backstop.>
 
 ```bash
-npx tsc --noEmit && npm run build
+bunx tsc --noEmit && bun run build
 ````
 
 ## Notes
@@ -91,9 +93,9 @@ what NOT to touch.>
   import" is too small.
 - Prefer many small disjoint tasks in a level over one large task. Disjoint
   tasks parallelize; large tasks serialize and are harder to verify.
-- The first task (typically `01-repo-init` or `00-...`) creates `CLAUDE.md` and
-  the project skeleton. Everything depends on it, so it forms level 0 alone.
-- Cross-cutting tasks (ones that append to `CLAUDE.md`, edit root config, or
+- The first task (typically `01-repo-init` or `00-...`) creates `AGENTS.md` (plus a
+  `CLAUDE.md` containing `@AGENTS.md`) and the project skeleton. Everything depends on it, so it forms level 0 alone.
+- Cross-cutting tasks (ones that append to `AGENTS.md`, edit root config, or
   touch a shared schema) naturally serialize because their `touches` overlaps
   their siblings. That is correct, not a smell.
 

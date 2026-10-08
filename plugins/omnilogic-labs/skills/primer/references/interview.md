@@ -7,7 +7,7 @@ research and decomposition. Do not try to specify the whole product up front.
 
 ## Principles
 
-- **Ask in batches, not one at a time.** Use `AskUserQuestion` with up to four
+- **Ask in batches, not one at a time.** Use the host's question tool if it has one (otherwise ask in chat) with up to four
   questions per call. One or two batches is usually enough.
 - **Every question carries a proposed answer.** Phrase options as concrete
   choices with a recommendation, not "what do you want?". This mirrors the
