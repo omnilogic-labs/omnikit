@@ -1,0 +1,165 @@
+#!/bin/bash
+set -e
+# wt: one git worktree per worker. Status goes to stderr, data to stdout.
+#
+#   wt create <name> [base]       new worktree on <prefix><name>; prints its path
+#   wt list                       name, branch, state, commits ahead, path (TSV)
+#   wt merge <name> [--into BR]   merge <prefix><name> into BR (default: base branch)
+#   wt remove <name>              remove a clean worktree; keeps an unmerged branch
+#
+# Settings come from .agents/coordinator.md in the main checkout (see
+# references/config.md): "worktree root", "branch prefix", "base branch",
+# "provision" and "teardown". Defaults: ../<repo>-worktrees, wave/, the
+# branch checked out in the main checkout, and no provision or teardown.
+
+die() {
+  echo "wt: $*" >&2
+  exit 1
+}
+say() { echo "wt: $*" >&2; }
+
+usage() {
+  sed -n '3,13s/^# \{0,1\}//p' "$0" >&2
+  exit "${1:-1}"
+}
+
+MAIN="$(git rev-parse --path-format=absolute --git-common-dir 2> /dev/null)" || die "not inside a git repository"
+MAIN="$(dirname "$MAIN")"
+CONFIG="$MAIN/.agents/coordinator.md"
+
+# cfg <key>: the value of a "key: value" line in the config, if any.
+cfg() {
+  [ -f "$CONFIG" ] || return 0
+  awk -v key="$1" '
+    {
+      line = $0
+      sub(/^[[:space:]]*[-*][[:space:]]*/, "", line)
+      gsub(/\*\*/, "", line)
+      i = index(line, ":")
+      if (i == 0) next
+      k = tolower(substr(line, 1, i - 1))
+      if (k != key) next
+      v = substr(line, i + 1)
+      gsub(/`/, "", v)
+      sub(/^[[:space:]]+/, "", v)
+      sub(/[[:space:]]+$/, "", v)
+      print v
+      exit
+    }' "$CONFIG"
+}
+
+ROOT="$(cfg 'worktree root')"
+ROOT="${ROOT:-../$(basename "$MAIN")-worktrees}"
+case "$ROOT" in /*) ;; *) ROOT="$MAIN/$ROOT" ;; esac
+PREFIX="$(cfg 'branch prefix')"
+PREFIX="${PREFIX:-wave/}"
+BASE="$(cfg 'base branch')"
+BASE="${BASE:-$(git -C "$MAIN" symbolic-ref --quiet --short HEAD || echo main)}"
+
+check_name() {
+  [ -n "$1" ] || usage
+  case "$1" in
+    *[!a-z0-9._-]*) die "name '$1' must use only a-z, 0-9, '.', '_' and '-'" ;;
+  esac
+}
+
+# run_hook <key> <dir>: run the configured provision or teardown command in dir.
+run_hook() {
+  local cmd
+  cmd="$(cfg "$1")"
+  [ -n "$cmd" ] || return 0
+  say "$1: $cmd"
+  (cd "$2" && bash -c "$cmd") >&2 || die "$1 failed in $2"
+}
+
+# checkout_of <branch>: the worktree path that has <branch> checked out.
+checkout_of() {
+  git -C "$MAIN" worktree list --porcelain | awk -v want="refs/heads/$1" '
+    /^worktree / { path = substr($0, 10) }
+    $0 == "branch " want { print path; exit }'
+}
+
+is_dirty() { [ -n "$(git -C "$1" status --porcelain)" ]; }
+
+cmd_create() {
+  local name="$1" base="${2:-$BASE}" path
+  check_name "$name"
+  mkdir -p "$ROOT"
+  path="$(cd "$ROOT" && pwd)/$name"
+  [ ! -e "$path" ] || die "$path already exists"
+  git -C "$MAIN" rev-parse --verify --quiet "refs/heads/$PREFIX$name" > /dev/null \
+    && die "branch $PREFIX$name already exists"
+  git -C "$MAIN" worktree add --quiet -b "$PREFIX$name" "$path" "$base" >&2
+  run_hook provision "$path"
+  say "created $path on $PREFIX$name from $base"
+  echo "$path"
+}
+
+cmd_list() {
+  local path branch name state ahead
+  git -C "$MAIN" worktree list --porcelain | awk '
+    /^worktree / { path = substr($0, 10) }
+    /^branch refs\/heads\// { print path "\t" substr($0, 19) }' \
+    | while IFS=$'\t' read -r path branch; do
+      case "$branch" in "$PREFIX"*) ;; *) continue ;; esac
+      name="${branch#"$PREFIX"}"
+      state=clean
+      is_dirty "$path" && state=dirty
+      ahead="$(git -C "$MAIN" rev-list --count "$BASE..$branch")"
+      printf '%s\t%s\t%s\t%s\t%s\n' "$name" "$branch" "$state" "$ahead" "$path"
+    done
+}
+
+cmd_merge() {
+  local name="$1" into="$BASE" branch target mb overlap
+  check_name "$name"
+  shift
+  if [ "${1:-}" = "--into" ]; then
+    into="${2:?--into needs a branch}"
+  fi
+  branch="$PREFIX$name"
+  git -C "$MAIN" rev-parse --verify --quiet "refs/heads/$branch" > /dev/null || die "no branch $branch"
+  target="$(checkout_of "$into")"
+  [ -n "$target" ] || die "$into is not checked out in any worktree; check it out first"
+  is_dirty "$target" && die "$target has uncommitted changes; refusing to merge into it"
+  mb="$(git -C "$MAIN" merge-base "$into" "$branch")"
+  overlap="$(comm -12 \
+    <(git -C "$MAIN" diff --name-only "$mb" "$into" | sort) \
+    <(git -C "$MAIN" diff --name-only "$mb" "$branch" | sort))"
+  if [ -n "$overlap" ]; then
+    echo "wt: $branch and $into both changed these files since $(git -C "$MAIN" rev-parse --short "$mb"):" >&2
+    printf '  %s\n' "$overlap" >&2
+    die "refusing to merge; integrate these by hand or in a builder"
+  fi
+  git -C "$target" merge --quiet --no-ff --no-edit "$branch" >&2
+  say "merged $branch into $into"
+  git -C "$target" rev-parse HEAD
+}
+
+cmd_remove() {
+  local name="$1" path branch
+  check_name "$name"
+  branch="$PREFIX$name"
+  path="$(checkout_of "$branch")"
+  [ -n "$path" ] || die "no worktree has $branch checked out"
+  is_dirty "$path" && die "$path has uncommitted changes; commit or discard them first"
+  run_hook teardown "$path"
+  git -C "$MAIN" worktree remove "$path" >&2
+  if git -C "$MAIN" merge-base --is-ancestor "$branch" "$BASE"; then
+    git -C "$MAIN" branch --quiet -d "$branch" >&2
+    say "removed $path; deleted merged branch $branch"
+  else
+    say "removed $path; kept unmerged branch $branch"
+  fi
+}
+
+sub="${1:-}"
+[ $# -gt 0 ] && shift
+case "$sub" in
+  create) cmd_create "$@" ;;
+  list) cmd_list ;;
+  merge) cmd_merge "$@" ;;
+  remove) cmd_remove "$@" ;;
+  -h | --help | help) usage 0 ;;
+  *) usage ;;
+esac

@@ -1,0 +1,69 @@
+#!/bin/bash
+# render-ssh: SSH into a Render.com service with the host-key suppression flags
+# Render requires. The private key comes from a file: -i, else $RENDER_SSH_KEY,
+# else ~/.ssh/render_ed25519. This script does not know or care where the file
+# came from (env, a secret manager, manual). It must be authorized for the
+# Render ACCOUNT that owns the service.
+set -e
+
+usage() {
+  cat >&2 << 'EOF'
+Usage: render-ssh [-i KEYFILE] <srv-host> ['command']
+
+  <srv-host>   srv-XXXX@ssh.<region>.render.com  (from the service's Connect
+               page in the Render dashboard, or your env as RENDER_HOST).
+  command      Optional. If given, runs non-interactively and returns its
+               output. If omitted, opens an interactive shell.
+
+Key resolution (first that exists wins):
+  -i KEYFILE              explicit path
+  $RENDER_SSH_KEY         path from the environment
+  ~/.ssh/render_ed25519   default
+
+Wrong key symptom: "Permission denied (publickey)" means the key is not
+authorized for the account that owns this service. Use the key whose label
+matches that account; see references/ssh-and-hosting.md.
+EOF
+  exit 2
+}
+
+KEY=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -i)
+      KEY="$2"
+      shift 2
+      ;;
+    -h | --help) usage ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "render-ssh: unknown option $1" >&2
+      usage
+      ;;
+    *) break ;;
+  esac
+done
+
+HOST="${1:-}"
+[ -n "$HOST" ] || usage
+shift || true
+
+KEY="${KEY:-${RENDER_SSH_KEY:-$HOME/.ssh/render_ed25519}}"
+if [ ! -s "$KEY" ]; then
+  echo "render-ssh: key file '$KEY' is missing or empty. Provide one with -i, \$RENDER_SSH_KEY, or at ~/.ssh/render_ed25519." >&2
+  exit 1
+fi
+chmod 600 "$KEY" 2> /dev/null || true
+
+# Render rotates and reuses host keys across deploys, so known_hosts is useless
+# and emits spurious warnings. Suppress them and cap the connect wait (instances
+# may be sleeping).
+exec ssh -i "$KEY" \
+  -o StrictHostKeyChecking=no \
+  -o UserKnownHostsFile=/dev/null \
+  -o LogLevel=ERROR \
+  -o ConnectTimeout=10 \
+  "$HOST" "$@"

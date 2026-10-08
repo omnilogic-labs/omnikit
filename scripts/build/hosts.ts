@@ -16,6 +16,8 @@ export interface Host {
   cli: Record<Tier, string>;
   /** Dispatch tool names, read as {{tool.<key>}}. */
   tool: Record<string, string>;
+  /** Other models the host has but we do not use by default, read as {{alt.<key>}}. */
+  alt?: Record<string, string>;
   /** Output root for this host's skills/ and agents/, relative to the build out dir. */
   root: string;
   /** Agent file format this host gets. */
@@ -33,6 +35,7 @@ export const HOSTS: Record<HostName, Host> = {
     label: "Claude Code",
     tier: { deep: "opus", fast: "sonnet" },
     cli: { deep: "opus", fast: "sonnet" },
+    alt: { stronger: "fable", lighter: "haiku" },
     tool: {
       agent: "Agent",
       agentType: "subagent_type",
@@ -49,6 +52,7 @@ export const HOSTS: Record<HostName, Host> = {
     tier: { deep: "gpt-6.1-sol", fast: "gpt-6-luna" },
     effort: { deep: "high", fast: "medium" },
     cli: { deep: "gpt-6.1-sol", fast: "gpt-6-luna" },
+    alt: { frontier: "gpt-6-astra" },
     tool: { agent: "spawn_agent" },
     root: "dist/codex",
     agentFormat: "codex-toml",
@@ -84,6 +88,7 @@ function ownVars(h: Host): Record<string, string> {
     if (h.effort) v[`effort.${t}`] = h.effort[t];
   }
   for (const [k, name] of Object.entries(h.tool)) v[`tool.${k}`] = name;
+  for (const [k, name] of Object.entries(h.alt ?? {})) v[`alt.${k}`] = name;
   return v;
 }
 
