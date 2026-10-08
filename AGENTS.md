@@ -1,12 +1,12 @@
 # Omnikit
 
-Cross-platform agent skills by Omnilogic Labs, for Claude Code, Codex, and Gemini CLI.
+Cross-platform agent skills by Omnilogic Labs, for Claude Code, Codex, and Antigravity (agy).
 
 ## Layout
 
 - `plugins/omnilogic-labs/` is the one plugin: `skills/`, `agents/`, `bin/`, `evals/`
-- `skills/` holds generated symlinks into the plugin for Codex and Gemini; never hand-edit
-- `.claude-plugin/marketplace.json` is the marketplace manifest; `gemini-extension.json` is the Gemini one
+- `skills/` holds generated symlinks into the plugin for Codex and agy; never hand-edit
+- `.claude-plugin/marketplace.json` is the marketplace manifest
 - `install.sh` is the single install path; `scripts/skill-stats.sh` checks budgets
 
 ## Skills

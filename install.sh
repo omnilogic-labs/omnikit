@@ -8,7 +8,6 @@
 #                 into this clone, so an edit here is live immediately.
 #   agy           (Antigravity CLI) gets the same links in ~/.gemini/config/skills,
 #                 its global skills root. It does not read ~/.agents/skills.
-#   Gemini CLI    links this clone as an extension.
 #
 # Safe to re-run. Status goes to stderr. Machine output (--check findings and
 # --dry-run commands) goes to stdout.
@@ -27,7 +26,6 @@ PLUGIN_ID="$PLUGIN@$MARKETPLACE"
 DO_CLAUDE=false
 DO_AGENTS=false
 DO_AGY=false
-DO_GEMINI=false
 TARGETED=false
 DEPS=true
 BROWSER=false
@@ -54,7 +52,6 @@ Targets (default: every tool found on PATH):
                     (--codex is an alias)
   --agy             Antigravity CLI: link each skill into
                     ~/.gemini/config/skills
-  --gemini          Gemini CLI: link this clone as an extension
 
 Options:
   --check           report missing, stale, and legacy links; change nothing;
@@ -74,7 +71,6 @@ while [ $# -gt 0 ]; do
     --claude) DO_CLAUDE=true && TARGETED=true ;;
     --agents | --codex) DO_AGENTS=true && TARGETED=true ;;
     --agy) DO_AGY=true && TARGETED=true ;;
-    --gemini) DO_GEMINI=true && TARGETED=true ;;
     --check) CHECK=true ;;
     --no-deps) DEPS=false ;;
     --deps) DEPS=true ;;
@@ -100,7 +96,6 @@ if ! $TARGETED; then
   has claude && DO_CLAUDE=true
   if has codex || [ -d "$AGENTS_SKILLS_DIR" ]; then DO_AGENTS=true; fi
   if has agy || [ -d "$AGY_SKILLS_DIR" ]; then DO_AGY=true; fi
-  has gemini && DO_GEMINI=true
 fi
 
 # --check never writes, so it also never runs an external command.
@@ -225,8 +220,8 @@ prune_dir() {
 
 skill_dirs() { find "$SKILLS_SRC" -mindepth 1 -maxdepth 1 -type d | sort; }
 
-# The flat skills/ directory at the repo root is how Gemini and the
-# `npx skills` installer discover the skills. It is generated, never edited.
+# The flat skills/ directory at the repo root is how the
+# `npx skills` installer discovers the skills. It is generated, never edited.
 sync_repo_skills() {
   local dir="$REPO_ROOT/skills" names=() src name
   say ""
@@ -343,30 +338,10 @@ clean_nested_modules() {
   done < <(nested_modules)
 }
 
-install_gemini() {
-  say ""
-  say "Gemini CLI"
-  $CHECK && return 0
-
-  if ! has gemini; then
-    say "  gemini not on PATH. Install it, then run: bash install.sh --gemini"
-    if ! $DRY_RUN; then return 0; fi
-  fi
-
-  if $DRY_RUN; then
-    run gemini extensions link .
-    return 0
-  fi
-
-  if (cd "$REPO_ROOT" && gemini extensions link .) >&2; then
-    say "  linked this clone as an extension; edits are live"
-  else
-    say "  extension link failed, falling back to per-skill links"
-    local src
-    while IFS= read -r src; do
-      gemini skills link "$src" >&2 || say "  skip $(basename "$src")"
-    done < <(skill_dirs)
-  fi
+# The Gemini CLI is not supported. An earlier version linked this clone into
+# ~/.gemini/extensions; prune that link if it is still there.
+remove_gemini_cli_legacy() {
+  prune_dir legacy "$HOME/.gemini/extensions"
 }
 
 say "Omnikit Installer"
@@ -416,7 +391,7 @@ skipped() {
 if $DO_CLAUDE; then install_claude; else skipped "Claude Code" claude; fi
 if $DO_AGENTS; then install_agents; else skipped "Codex" codex; fi
 if $DO_AGY; then install_agy; else skipped "Antigravity CLI" agy; fi
-if $DO_GEMINI; then install_gemini; else skipped "Gemini CLI" gemini; fi
+remove_gemini_cli_legacy
 
 if $CHECK; then
   say ""
@@ -428,9 +403,9 @@ if $CHECK; then
   exit 0
 fi
 
-if ! $DO_CLAUDE && ! $DO_AGENTS && ! $DO_AGY && ! $DO_GEMINI; then
+if ! $DO_CLAUDE && ! $DO_AGENTS && ! $DO_AGY; then
   say ""
-  say "No supported agent tools found on PATH (claude, codex, agy, gemini)."
+  say "No supported agent tools found on PATH (claude, codex, agy)."
   say "Install one and re-run, or force a target: bash install.sh --agents"
 fi
 

@@ -1,6 +1,6 @@
 # Omnikit
 
-Cross-platform agent skills for [Claude Code](https://claude.com/claude-code), [Codex CLI](https://github.com/openai/codex), and [Gemini CLI](https://github.com/google-gemini/gemini-cli). By [Omnilogic Labs](https://github.com/omnilogic-labs).
+A Claude Code plugin marketplace that also installs its skills for Codex and Antigravity (agy). By [Omnilogic Labs](https://github.com/omnilogic-labs).
 
 ## Skills
 
@@ -32,9 +32,8 @@ bash install.sh
 | Claude Code     | `omnilogic-labs@omnikit` plugin from this clone's `omnikit` marketplace |
 | Codex CLI       | one symlink per skill in `~/.agents/skills`, live on edit               |
 | Antigravity CLI | one symlink per skill in `~/.gemini/config/skills`, live on edit        |
-| Gemini CLI      | this clone linked as an extension (`gemini-extension.json`)             |
 
-The installer picks every tool it finds on PATH and says which ones it skipped. Other flags: `--claude`, `--codex`, `--agy`, `--gemini` (one tool only), `--browser` (also set up agent-browser and Chrome), `--force`, `--check`, `--help`. Re-run after a `git pull` that adds or renames a skill, and restart open Claude Code, Codex, and agy sessions so they rescan.
+The installer picks every tool it finds on PATH and says which ones it skipped. Other flags: `--claude`, `--codex`, `--agy` (one tool only), `--browser` (also set up agent-browser and Chrome), `--force`, `--check`, `--help`. Re-run after a `git pull` that adds or renames a skill, and restart open Claude Code, Codex, and agy sessions so they rescan.
 
 Run the installer from the main checkout, not a worktree: Claude Code's marketplace points at whichever clone ran it.
 
@@ -75,10 +74,9 @@ Each plugin under `plugins/*` is a workspace member. The root package is private
 omnikit/
   AGENTS.md                         # Layout, skills, conventions (CLAUDE.md imports it)
   .claude-plugin/marketplace.json   # Claude Code marketplace manifest
-  gemini-extension.json             # Gemini CLI extension manifest
   plugins/omnilogic-labs/           # The plugin: skills/, agents/, bin/, evals/
-  skills/                           # Generated symlinks for Codex and Gemini
-  install.sh                        # Installs into Claude Code, Codex, agy, and Gemini
+  skills/                           # Generated symlinks for Codex and agy
+  install.sh                        # Installs into Claude Code, Codex, and agy
   scripts/verify-install.sh         # Checks what each tool registered
   scripts/skill-stats.sh            # Token and size budget check
 ```
