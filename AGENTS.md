@@ -18,7 +18,6 @@ This repo distributes agent skills for Claude Code, Codex CLI, and Gemini CLI.
 - **onepassword**: read secrets from 1Password through the op CLI, WSL aware
 - **render**: work with Render.com, from render.yaml to SSH to the REST API
 - **primer**: turn a vague product idea into a build brief and task files
-- **task-triage, worktree-pipeline, task-tracking** (night-shift plugin): unattended build runs. The agents and commands the plugin also ships are Claude Code only; these three skills run standalone, with the concurrency cap dropped to 1
 
 ## Working Agreements
 
