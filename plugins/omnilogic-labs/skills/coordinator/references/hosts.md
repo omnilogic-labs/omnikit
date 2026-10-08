@@ -1,0 +1,60 @@
+# Dispatching workers, by host
+
+The role prompts are the plugin's agent files: `planner.md`, `builder.md` and `verifier.md`. From this skill's
+folder they are at `../../agents/<role>.md`. A host that loads plugin agents uses them by name. A host that does not
+should read the file and pass its body (everything after the frontmatter) as the start of the worker's prompt.
+
+Every dispatch prompt names three things: the plan file, the task name, and the worktree path. Ask for a reply of
+ten lines or fewer.
+
+| Role     | Model choice                                               |
+| -------- | ---------------------------------------------------------- |
+| planner  | strongest, always                                          |
+| builder  | fast for rote or straightforward work; strongest otherwise |
+| verifier | fast per task; strongest for a milestone review            |
+
+## Claude Code
+
+- Dispatch with the Agent tool, `subagent_type: "omnilogic-labs:<role>"` (for example
+  `omnilogic-labs:builder`).
+- Set `model` on the call: `opus` for the strongest, `sonnet` for the fast model. The agent files default to
+  `opus` for the planner and `sonnet` for the builder and verifier, so override the model only for a complicated
+  build or a milestone review.
+- Run independent workers in one message so they run in parallel. Long ones can run in the background; you are
+  notified when they finish.
+- Do not use `isolation: "worktree"` or `EnterWorktree`. Builders work in the worktree `scripts/wt` made.
+- Ask a finished worker a follow-up with `SendMessage` instead of reading its files.
+- To check what is already running before you dispatch, look at your live background agents.
+
+## Codex
+
+- Codex does not load plugin agents. Read `../../agents/<role>.md` and use its body as the role prompt.
+- Dispatch with its subagent spawn tool (`spawn_agent`), then wait for results with its wait tool. Pick the
+  strongest model your account has for the planner and complicated builds, and a faster one otherwise.
+- Without spawn tools, run a worker as a separate process from inside the worktree:
+  `codex exec -C <worktree> --sandbox workspace-write "<role prompt + task>"`.
+- Do not use Codex's own worktree mode. Builders work in the worktree `scripts/wt` made.
+
+## Antigravity (agy)
+
+- Read `../../agents/<role>.md` and use its body as the role prompt.
+- Dispatch with `invoke_subagent`. Use the pro model for the planner and for a milestone review, and the flash
+  model for builders and verifiers. Use pro for a complicated build.
+- Use the workspace mode that inherits the current directory, and point the worker at its worktree path. Do not
+  use a mode that makes its own branch.
+
+## No subagents
+
+If the host cannot run workers, play each role yourself, one after another:
+
+1. Read the role file and follow it for that step only.
+2. Keep each role's output in its file (plan, commit, verify report) so the next role starts from the file, not
+   from memory.
+3. Still use one worktree per task and still run every acceptance command.
+
+Say in every report to the owner that verification was not independent: the same agent built and verified the
+work.
+
+## External workers
+
+External workers (codex, agy) via the omnilogic-labs external-workers tool: see Wave 3.
