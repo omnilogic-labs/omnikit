@@ -55,7 +55,7 @@ dispatch each role on your host, and which model to pick, is in `references/host
 1. **Plan.** If there is no plan, dispatch a planner with the goal. It writes the plan to a file and replies
    with the file path, the task list, and the waves. Record each task as `planned` in the ledger.
 2. **Build.** For each task in the current wave whose dependencies are `merged`, up to max lanes at once:
-   - create a worktree with `scripts/wt create <task>`, which prints its path;
+   - create a worktree with `scripts/wt create <task>` (`scripts/` is relative to this SKILL.md's directory, not the repo root), which prints its path;
    - pick the model: fast for rote work, strongest for anything complicated;
    - dispatch a builder with the plan path, the task name, and the worktree path;
    - mark the task `building`.
@@ -98,7 +98,7 @@ blocked and why, and the exact decision or credential you need.
 
 ## Worktree helper
 
-`scripts/wt` creates, lists, merges, and removes one worktree per task. Status goes to stderr and data to
+`scripts/wt` (in this SKILL.md's directory, not the repo root `scripts/`) creates, lists, merges, and removes one worktree per task. Status goes to stderr and data to
 stdout, so `scripts/wt list` is safe to parse.
 
 - `create <name> [base]` makes `<root>/<name>` on branch `<prefix><name>` and prints its path.

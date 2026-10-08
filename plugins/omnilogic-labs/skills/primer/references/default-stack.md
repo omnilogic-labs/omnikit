@@ -13,7 +13,7 @@ the numbers here go stale. This file fixes the _choices_, not the _versions_.
 ## Resolution order
 
 1. **The user stated a stack** (in the conversation or interview). Use it.
-2. **A user stack profile exists** at `~/.claude/primer/stack.md`. Use it as the
+2. **A user stack profile exists** at `~/.agents/primer/stack.md` (or `~/.claude/primer/stack.md` if that is the one that exists). Use it as the
    default proposal and tell the user you are using their profile.
 3. **Neither.** Use the default below, and present it as a proposal the user can
    override.
@@ -66,7 +66,7 @@ For a typical web product the default is a TypeScript full-stack app:
 ## Overriding
 
 To replace this default with your own house stack, create
-`~/.claude/primer/stack.md` with the same shape (the choices, not the versions).
+`~/.agents/primer/stack.md` with the same shape (the choices, not the versions).
 The skill reads it in Phase 2 and proposes it instead of this file. You can keep
 several profiles (for example `stack-web.md`, `stack-cli.md`) and tell the skill
 which to use during the interview. Project-specific constraints stated in the

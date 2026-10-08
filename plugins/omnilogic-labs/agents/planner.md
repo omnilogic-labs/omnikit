@@ -31,8 +31,5 @@ Size each task for one builder in one focused session. A plan always ends each t
 **Rescope.** After two failed verifications, read the task, the verify reports, and the branch. Then write a
 revised task (`<task>-v2`), split it, or say it needs an owner decision and why.
 
-**Milestone review.** If asked, check the integrated result against the plan's goal and say ACCEPT or REJECT,
-with a new task for each gap.
-
 Your reply is ten lines or fewer: the plan file path, the task names with their model, the waves, and any owner
 questions.

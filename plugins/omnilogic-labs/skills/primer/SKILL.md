@@ -1,7 +1,7 @@
 ---
 name: primer
 description: >-
-  Turn a vague product idea into a primer.md build-brief, decompose it into idempotent task files under docs/init/, and run the build. Use for fuzzy concepts, "make a primer", "bootstrap a project from this idea", "scaffold this app", "decompose into tasks", "run the build".
+  Turn a vague product idea into a primer.md build-brief, decompose it into idempotent task files under docs/init/, and run the primer build. Use for fuzzy concepts, "make a primer", "bootstrap a project from this idea", "decompose into tasks", "run the primer build".
 ---
 
 # primer
@@ -52,7 +52,7 @@ Settle the stack, then verify it against current reality. Never pin a library
 version from memory.
 
 - **Resolve the stack** in this order: (1) a stack the user stated, (2) a user
-  stack profile at `~/.claude/primer/stack.md` if it exists, (3) the shipped
+  stack profile at `~/.agents/primer/stack.md` (or `~/.claude/primer/stack.md` if that is the one that exists), (3) the shipped
   default in `references/default-stack.md`. Present the chosen stack as a
   Judgment Call the user can override.
 - Use current documentation (the context7 MCP or the `ctx7` CLI, whichever the

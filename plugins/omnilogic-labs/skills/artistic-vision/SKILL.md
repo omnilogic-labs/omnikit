@@ -8,6 +8,8 @@ metadata:
 
 # Artistic Vision
 
+Understands, generates, edits and processes images using Gemini and local sharp tools.
+
 ## Running
 
 ```bash
