@@ -4,9 +4,10 @@
 #   bash scripts/verify-install.sh          deterministic checks only
 #   bash scripts/verify-install.sh --ask    also ask each tool's model
 #
-# Deterministic checks: install.sh --check, the Claude Code marketplace and
-# plugin list, the skills, agents, plugin, and external_worker tool in Claude
-# Code's system/init event, and the skill links Codex and agy read.
+# Deterministic checks: the build is fresh (bun run build:check),
+# install.sh --check, the Claude Code marketplace and plugin list, the skills,
+# agents, plugin, and external_worker tool in Claude Code's system/init event,
+# and the skill and agent links Codex and agy read (into dist/codex, dist/agy).
 #
 # --ask runs one prompt per tool (claude, codex, agy) and checks that each
 # answer names every skill. It costs a few model calls and up to a few minutes.
@@ -23,7 +24,11 @@ PLUGIN_ID="$NS@omnikit"
 WORKER_TOOL="mcp__${NS}__external_worker"
 AGENTS_SKILLS_DIR="$HOME/.agents/skills"
 CODEX_SKILLS_DIR="${CODEX_HOME:-$HOME/.codex}/skills"
+CODEX_AGENTS_DIR="${CODEX_HOME:-$HOME/.codex}/agents"
 AGY_SKILLS_DIR="$HOME/.gemini/config/skills"
+AGY_AGENTS_DIR="$HOME/.gemini/config/agents"
+SRC="$REPO_ROOT/src"
+DIST="$REPO_ROOT/dist"
 ASK_TIMEOUT=300
 
 ASK=false
@@ -32,7 +37,7 @@ n_fail=0
 n_skip=0
 
 usage() {
-  sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//' >&2
+  sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//' >&2
 }
 
 while [ $# -gt 0 ]; do
@@ -79,8 +84,20 @@ if [ -n "$common" ]; then
   MAIN_ROOT="$(cd "$common/.." && pwd -P)"
 fi
 
-mapfile -t SKILLS < <(find "$PLUGIN_DIR/skills" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
-mapfile -t AGENTS < <(find "$PLUGIN_DIR/agents" -mindepth 1 -maxdepth 1 -name '*.md' -printf '%f\n' | sed 's/\.md$//' | sort)
+mapfile -t SKILLS < <(find "$SRC/skills" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+mapfile -t AGENTS < <(find "$SRC/agents" -mindepth 1 -maxdepth 1 -name '*.md' -printf '%f\n' | sed 's/\.md$//' | sort)
+
+# agents_for <host>: the source agents built for <host>. A `hosts:` list in an
+# agent's frontmatter limits it to those hosts; no list means every host.
+agents_for() {
+  local name hosts
+  for name in "${AGENTS[@]}"; do
+    hosts="$(awk '/^---$/{f++; next} f==1 && /^hosts:/' "$SRC/agents/$name.md")"
+    if [ -z "$hosts" ] || grep -qw -- "$1" <<< "$hosts"; then echo "$name"; fi
+  done
+}
+mapfile -t CODEX_AGENTS < <(agents_for codex)
+mapfile -t AGY_AGENTS < <(agents_for agy)
 
 SCRATCH="$(mktemp -d)"
 trap 'rm -rf "$SCRATCH"' EXIT
@@ -102,6 +119,20 @@ json_list() {
   local prefix="$1"
   shift
   printf '%s\n' "$@" | sed "s/^/$prefix/" | jq -R . | jq -sc .
+}
+
+check_build() {
+  say ""
+  say "Build"
+  if ! has bun; then
+    result fail build-fresh "bun not on PATH"
+    return 0
+  fi
+  if (cd "$REPO_ROOT" && bun run --silent build:check > "$SCRATCH/build.txt" 2> /dev/null); then
+    result pass build-fresh "generated trees match src/"
+  else
+    result fail build-fresh "$(tr '\n' ';' < "$SCRATCH/build.txt") run: bun run build"
+  fi
 }
 
 check_install() {
@@ -200,12 +231,13 @@ check_claude() {
   fi
 }
 
-# check_links <check> <dir>: <dir> holds exactly one link per skill, each into
-# this plugin, and no SKILL.md below a skill's top level.
+# check_links <check> <dir> <tree>: <dir> holds one link per skill, each into
+# the generated <tree> (dist/codex or dist/agy), and no SKILL.md below a
+# skill's top level.
 check_links() {
-  local check="$1" dir="$2" name bad=() nested
+  local check="$1" dir="$2" tree="$3" name bad=() nested
   for name in "${SKILLS[@]}"; do
-    [ "$(readlink -f "$dir/$name" 2> /dev/null)" = "$(readlink -f "$PLUGIN_DIR/skills/$name")" ] || bad+=("$name")
+    [ -e "$tree/skills/$name" ] && [ "$(readlink -f "$dir/$name" 2> /dev/null)" = "$(readlink -f "$tree/skills/$name")" ] || bad+=("$name")
   done
   if [ "${#bad[@]}" -eq 0 ]; then
     result pass "$check" "${#SKILLS[@]} links in $dir"
@@ -223,11 +255,27 @@ check_links() {
   fi
 }
 
+# check_agent_links <check> <dir> <tree> <ext> <name...>: <dir> holds a link
+# <name><ext> into <tree>/agents for each agent.
+check_agent_links() {
+  local check="$1" dir="$2" tree="$3" ext="$4" name bad=()
+  shift 4
+  for name in "$@"; do
+    [ -e "$tree/agents/$name$ext" ] && [ "$(readlink -f "$dir/$name$ext" 2> /dev/null)" = "$(readlink -f "$tree/agents/$name$ext")" ] || bad+=("$name$ext")
+  done
+  if [ "${#bad[@]}" -eq 0 ]; then
+    result pass "$check" "$# links in $dir"
+  else
+    result fail "$check" "missing or wrong in $dir: ${bad[*]}"
+  fi
+}
+
 check_codex_agy() {
   local entry n=0
   say ""
-  say "Codex and agy skill links"
-  check_links codex-links "$AGENTS_SKILLS_DIR"
+  say "Codex and agy skill and agent links"
+  check_links codex-links "$AGENTS_SKILLS_DIR" "$DIST/codex"
+  check_agent_links codex-agent-links "$CODEX_AGENTS_DIR" "$DIST/codex" .toml "${CODEX_AGENTS[@]}"
 
   for entry in "$CODEX_SKILLS_DIR"/*; do
     [ -L "$entry" ] || continue
@@ -240,7 +288,8 @@ check_codex_agy() {
   fi
 
   if has agy || [ -d "$AGY_SKILLS_DIR" ]; then
-    check_links agy-links "$AGY_SKILLS_DIR"
+    check_links agy-links "$AGY_SKILLS_DIR" "$DIST/agy"
+    check_agent_links agy-agent-links "$AGY_AGENTS_DIR" "$DIST/agy" .md "${AGY_AGENTS[@]}"
   else
     result skip agy-links "agy not on PATH"
   fi
@@ -289,6 +338,7 @@ say "Omnikit install verification"
 say "Repo: $REPO_ROOT"
 say "Expect ${#SKILLS[@]} skills (${SKILLS[*]}) and ${#AGENTS[@]} agents (${AGENTS[*]})"
 
+check_build
 check_install
 check_claude
 check_codex_agy

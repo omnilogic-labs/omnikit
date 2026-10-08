@@ -4,10 +4,15 @@
 #   Claude Code   installs the omnilogic-labs plugin from this clone's
 #                 marketplace (omnikit), and removes the per-skill symlinks
 #                 that older versions of this script created.
-#   Codex         gets one symlink per skill in ~/.agents/skills, pointing back
-#                 into this clone, so an edit here is live immediately.
-#   agy           (Antigravity CLI) gets the same links in ~/.gemini/config/skills,
-#                 its global skills root. It does not read ~/.agents/skills.
+#   Codex         gets one symlink per skill in ~/.agents/skills and one per
+#                 agent in ~/.codex/agents, pointing into dist/codex, the tree
+#                 `bun run build` renders for this machine's OS.
+#   agy           (Antigravity CLI) gets the same from dist/agy, in
+#                 ~/.gemini/config/skills and ~/.gemini/config/agents. It does
+#                 not read ~/.agents/skills.
+#
+# The build runs first, so an edit under src/ goes live on the next run.
+# OMNIKIT_OS=linux|wsl|macos|windows overrides the detected OS.
 #
 # Safe to re-run. Status goes to stderr. Machine output (--check findings and
 # --dry-run commands) goes to stdout.
@@ -16,9 +21,12 @@ set -e
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd -P)"
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 CODEX_SKILLS_DIR="${CODEX_HOME:-$HOME/.codex}/skills"
+CODEX_AGENTS_DIR="${CODEX_HOME:-$HOME/.codex}/agents"
 AGENTS_SKILLS_DIR="$HOME/.agents/skills"
 AGY_SKILLS_DIR="$HOME/.gemini/config/skills"
+AGY_AGENTS_DIR="$HOME/.gemini/config/agents"
 SKILLS_SRC="$REPO_ROOT/plugins/omnilogic-labs/skills"
+DIST="$REPO_ROOT/dist"
 MARKETPLACE="omnikit"
 PLUGIN="omnilogic-labs"
 PLUGIN_ID="$PLUGIN@$MARKETPLACE"
@@ -48,19 +56,24 @@ Installs this repo's skills into the agent tools on this machine.
 Targets (default: every tool found on PATH):
   --claude          Claude Code: install the omnilogic-labs plugin from the
                     omnikit marketplace in this clone, remove legacy links
-  --agents          Codex: link each skill into ~/.agents/skills
-                    (--codex is an alias)
+  --agents          Codex: link each skill into ~/.agents/skills and each
+                    agent into ~/.codex/agents (--codex is an alias)
   --agy             Antigravity CLI: link each skill into
-                    ~/.gemini/config/skills
+                    ~/.gemini/config/skills and each agent into
+                    ~/.gemini/config/agents
 
 Options:
-  --check           report missing, stale, and legacy links; change nothing;
-                    exit 1 if any are found
+  --check           report missing, stale, and legacy links, a stale build
+                    (stale-build) and a dist/ built for another OS (wrong-os);
+                    change nothing; exit 1 if any are found
   -n, --dry-run     print the external commands that would run, change nothing
   --no-deps         skip "bun install"
   --browser         also run setup-browser-buddy.sh (downloads Chrome)
   --force           move aside a real file or directory blocking a link
   -h, --help        this message
+
+Environment:
+  OMNIKIT_OS        linux, wsl, macos or windows; overrides OS detection
 USAGE
 }
 
@@ -103,6 +116,30 @@ case "$(uname -s)" in
     IS_WINDOWS=true
     export MSYS="winsymlinks:nativestrict${MSYS:+ $MSYS}"
     export CYGWIN="winsymlinks:nativestrict${CYGWIN:+ $CYGWIN}"
+    ;;
+esac
+
+# detect_os: the OS the dist/ trees are rendered for.
+detect_os() {
+  if [ -n "${OMNIKIT_OS:-}" ]; then
+    echo "$OMNIKIT_OS"
+    return 0
+  fi
+  case "$(uname -s)" in
+    MINGW* | MSYS* | CYGWIN*) echo windows ;;
+    Darwin) echo macos ;;
+    Linux)
+      if grep -qi microsoft /proc/version 2> /dev/null; then echo wsl; else echo linux; fi
+      ;;
+    *) echo linux ;;
+  esac
+}
+OS="$(detect_os)"
+case "$OS" in
+  linux | wsl | macos | windows) ;;
+  *)
+    echo "error: OMNIKIT_OS must be linux, wsl, macos or windows (got $OS)" >&2
+    exit 1
     ;;
 esac
 
@@ -254,55 +291,69 @@ prune_dir() {
   done
 }
 
-skill_dirs() { find "$SKILLS_SRC" -mindepth 1 -maxdepth 1 -type d | sort; }
-
-# Git for Windows clones with core.symlinks=false, which checks the committed
-# skills/ links out as small text files holding the link target. Turn the
-# setting on for this clone and check those paths out again as real links.
-repair_git_symlinks() {
-  local placeholders=() path
-  has git || return 0
-  while IFS= read -r path; do
-    [ -n "$path" ] && [ -f "$REPO_ROOT/$path" ] && [ ! -L "$REPO_ROOT/$path" ] && placeholders+=("$path")
-  done < <(git -C "$REPO_ROOT" ls-files -s -- skills 2> /dev/null | awk '$1 == "120000" { print $4 }')
-  [ "${#placeholders[@]}" -gt 0 ] || return 0
-
-  if $CHECK; then
-    for path in "${placeholders[@]}"; do problem placeholder "$REPO_ROOT/$path"; done
-    return 0
-  fi
-  say ""
-  say "Repo skills/ holds ${#placeholders[@]} symlink(s) checked out as text files (core.symlinks=false)"
-  if ! can_symlink; then
-    windows_symlink_help
-    return 0
-  fi
-  run git -C "$REPO_ROOT" config core.symlinks true
-  $DRY_RUN || rm -f "${placeholders[@]/#/$REPO_ROOT/}"
-  run git -C "$REPO_ROOT" checkout -- "${placeholders[@]}"
-  say "  set core.symlinks=true for this clone and checked skills/ out as links"
+# dist_entries <dir> <pattern>: the generated entries in <dir> matching
+# <pattern>, one path per line.
+dist_entries() {
+  local dir="$1" pattern="$2"
+  [ -d "$dir" ] || return 0
+  find "$dir" -mindepth 1 -maxdepth 1 -name "$pattern" | sort
 }
 
-# The flat skills/ directory at the repo root is how the
-# `npx skills` installer discovers the skills. It is generated, never edited.
-sync_repo_skills() {
-  local dir="$REPO_ROOT/skills" names=() src name
-  say ""
-  say "Repo skills/ index"
+# link_all <target-dir> <src-dir> <pattern>: links each entry of <src-dir>
+# matching <pattern> into <target-dir>, then prunes links of ours in
+# <target-dir> that are no longer generated.
+link_all() {
+  local dir="$1" srcdir="$2" pattern="$3" names=() src name
   $DRY_RUN || mkdir -p "$dir"
-
   while IFS= read -r src; do
     name="$(basename "$src")"
     names+=("$name")
-    # A placeholder that repair_git_symlinks reported or would replace.
-    if $DRY_RUN && [ -f "$dir/$name" ] && [ ! -L "$dir/$name" ] \
-      && [ "$(cat "$dir/$name")" = "../${src#"$REPO_ROOT"/}" ]; then
-      continue
-    fi
-    link_into "$dir" "../${src#"$REPO_ROOT"/}" "$name"
-  done < <(skill_dirs)
-
+    link_into "$dir" "$src" "$name"
+  done < <(dist_entries "$srcdir" "$pattern")
   prune_dir stale "$dir" "${names[@]}"
+}
+
+# Root skills/ used to hold committed symlinks into the plugin. It is now a
+# generated tree of real directories; remove any old links a clone still has.
+prune_root_skill_links() {
+  prune_dir legacy "$REPO_ROOT/skills"
+}
+
+# build_dist: renders src/ into the plugin, the root skills/ tree, and
+# dist/<host> for this OS. Under --check, compares instead.
+build_dist() {
+  local out host os_file got
+  say ""
+  if $CHECK; then
+    say "Build (check, OS $OS)"
+    if ! has bun; then
+      problem no-bun "bun not on PATH; cannot check the build"
+      return 0
+    fi
+    if ! out="$(cd "$REPO_ROOT" && bun run --silent build:check 2> /dev/null)"; then
+      problem stale-build "${out//$'\n'/; }"
+    fi
+    for host in codex agy; do
+      os_file="$DIST/$host/.os"
+      if [ ! -f "$os_file" ]; then
+        problem missing-build "$DIST/$host"
+        continue
+      fi
+      got="$(tr -d '[:space:]' < "$os_file")"
+      [ "$got" = "$OS" ] || problem wrong-os "$DIST/$host built for $got, this machine is $OS"
+    done
+    return 0
+  fi
+  say "Build (bun run build -- --os $OS)"
+  if ! has bun; then
+    say "error: bun not found. Install it from https://bun.sh, then re-run."
+    exit 1
+  fi
+  if $DRY_RUN; then
+    run bun run build -- --os "$OS"
+  else
+    (cd "$REPO_ROOT" && bun run build -- --os "$OS" >&2)
+  fi
 }
 
 # Claude Code installs the plugin through the marketplace, so every per-skill,
@@ -367,35 +418,23 @@ install_claude() {
 }
 
 install_agents() {
-  local names=() src name
   say ""
-  say "Codex ($AGENTS_SKILLS_DIR)"
-  $DRY_RUN || mkdir -p "$AGENTS_SKILLS_DIR"
+  say "Codex ($AGENTS_SKILLS_DIR, $CODEX_AGENTS_DIR)"
+  link_all "$AGENTS_SKILLS_DIR" "$DIST/codex/skills" '*'
+  # Codex loads custom agents from ~/.codex/agents/<name>.toml.
+  link_all "$CODEX_AGENTS_DIR" "$DIST/codex/agents" '*.toml'
 
-  while IFS= read -r src; do
-    name="$(basename "$src")"
-    names+=("$name")
-    link_into "$AGENTS_SKILLS_DIR" "$src" "$name"
-  done < <(skill_dirs)
-  prune_dir stale "$AGENTS_SKILLS_DIR" "${names[@]}"
-
-  # Codex reads ~/.agents/skills now; older installs linked here as well.
+  # Codex reads ~/.agents/skills too; older installs linked here as well, and
+  # a skill in both shows up twice.
   prune_dir legacy "$CODEX_SKILLS_DIR"
 }
 
 # agy scans ~/.gemini/config/skills one level deep and follows symlinks.
 install_agy() {
-  local names=() src name
   say ""
-  say "Antigravity CLI ($AGY_SKILLS_DIR)"
-  $DRY_RUN || mkdir -p "$AGY_SKILLS_DIR"
-
-  while IFS= read -r src; do
-    name="$(basename "$src")"
-    names+=("$name")
-    link_into "$AGY_SKILLS_DIR" "$src" "$name"
-  done < <(skill_dirs)
-  prune_dir stale "$AGY_SKILLS_DIR" "${names[@]}"
+  say "Antigravity CLI ($AGY_SKILLS_DIR, $AGY_AGENTS_DIR)"
+  link_all "$AGY_SKILLS_DIR" "$DIST/agy/skills" '*'
+  link_all "$AGY_AGENTS_DIR" "$DIST/agy/agents" '*.md'
 }
 
 # Codex walks each skill directory several levels deep, so a node_modules
@@ -403,7 +442,7 @@ install_agy() {
 # ships nine) as an extra, unprefixed skill. bunfig.toml hoists dependencies to
 # the root node_modules; this removes per-skill ones left by an older layout.
 nested_modules() {
-  find "$SKILLS_SRC" -mindepth 2 -maxdepth 2 -name node_modules -type d | sort
+  find "$SKILLS_SRC" "$REPO_ROOT/src/skills" -mindepth 2 -maxdepth 2 -name node_modules -type d 2> /dev/null | sort
 }
 
 clean_nested_modules() {
@@ -434,8 +473,8 @@ elif $DRY_RUN; then
   say "Mode:   dry run, nothing will be written"
 fi
 
-if [ ! -d "$SKILLS_SRC" ]; then
-  say "error: $SKILLS_SRC not found"
+if [ ! -d "$REPO_ROOT/src/skills" ]; then
+  say "error: $REPO_ROOT/src/skills not found"
   exit 1
 fi
 
@@ -465,8 +504,8 @@ if $IS_WINDOWS && ! $CHECK && ! $DRY_RUN && ! can_symlink; then
   exit 1
 fi
 
-repair_git_symlinks
-sync_repo_skills
+build_dist
+prune_root_skill_links
 
 # skipped <tool> <binary>: says a target was not chosen because its CLI is
 # missing, so a silent install never looks like a successful one.
