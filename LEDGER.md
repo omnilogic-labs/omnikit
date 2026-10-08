@@ -7,7 +7,7 @@ report, merge and block, so a fresh context can resume from this file alone.
 
 **Plan:** plan/compile-step.md (untracked in main checkout; pass absolute path)
 
-**Current wave:** 5 (waves 1-4 merged to main; real install.sh run; verify 17/17)
+**Current wave:** milestone review (all 5 waves merged; verify 17/17)
 
 ## Tasks
 
@@ -32,7 +32,7 @@ merge commit, and anything the next wave needs.
 One line per live worker: role, task, model, and the id or name the host gave it. Remove the line when the worker
 reports. Check this list before dispatching, so no task gets two workers.
 
-- builder, docs, sonnet
+- verifier, milestone review, opus
 - planner, amend plan for portable root skills/, opus
 
 ## Waves
