@@ -23,6 +23,7 @@ Cross-platform agent skills by Omnilogic Labs, for Claude Code, Codex, and Gemin
 
 - planner (opus), builder (sonnet; opus for complex work), verifier (sonnet)
 - browser-buddy (haiku, medium effort): browser operator
+- external-runner (haiku, low effort): starts one Codex or agy job via the external_worker tool
 
 ## Conventions
 
