@@ -53,6 +53,7 @@ Success is exit 0 and a last stdout line of `summary pass=14 fail=0 skip=0` (`pa
 Troubleshooting:
 
 - agy lists no omnikit skills: it reads `~/.gemini/config/skills`, not `~/.agents/skills`. Run `bash install.sh --agy`.
+- `agy plugin import claude` is not used: it only scans real directories directly under `~/.claude/plugins` (symlinks and the plugin cache are skipped), copies them so edits need `--force` to re-import, brings in the 5 agents as no subagents and the Claude-only hook, and keeps skill names unprefixed. The symlinks stay live on edit.
 - agy drops one skill silently: its YAML parser is strict, so a `description:` with an unquoted `: ` fails. Use a `>-` block. The error is in `~/.gemini/antigravity-cli/cli.log`.
 - Codex lists extra skills such as `core`, `dogfood`, or a bare `agent-browser`: Codex walks skill folders several levels deep and finds the SKILL.md files inside a skill's `node_modules`. `bunfig.toml` hoists dependencies to the root, and `bash install.sh` removes any per-skill `node_modules` left from before.
 - Claude Code shows a skill twice, once without the prefix: a legacy link in `~/.claude/skills` or `~/.claude/agents`. `bash install.sh` removes links into this repo and leaves everything else alone.
