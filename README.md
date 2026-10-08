@@ -114,7 +114,7 @@ What it writes:
 
 Template syntax, in any `src/` Markdown file:
 
-- `{{tier.deep}}`, `{{cli.fast}}`, `{{tool.agent}}`, `{{host.label}}`, `{{os.shell}}`: values for the host being rendered. `{{codex.tier.deep}}` reads another host's value. An unknown name fails the build.
+- `{{tier.deep}}`, `{{cli.fast}}`, `{{tool.agent}}`, `{{host.label}}`, `{{os.shell}}`: values for the host being rendered. `{{os.*}}` works only inside a one-OS `@if` block (such as `<!-- @if windows -->`), because the committed any-OS trees have no single OS and the build fails elsewhere. `{{codex.tier.deep}}` reads another host's value. An unknown name fails the build.
 - `<!-- @if codex -->` ... `<!-- @endif -->` keeps the lines between only for that host. `<!-- @if claude,agy -->` is OR. A host list and an OS list may be combined with a space: `<!-- @if codex windows -->`. Blocks do not nest.
 - OS names are `linux`, `wsl`, `macos`, `windows`. In the committed any-OS trees an OS block is kept under a label line such as `On Windows (Git Bash):`; in `dist/` only the matching OS stays.
 - Agent frontmatter may carry `tier: deep|fast`; the build turns it into each host's model.
