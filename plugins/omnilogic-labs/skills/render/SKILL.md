@@ -6,7 +6,7 @@ description: >-
 
 # render
 
-Covers the `render.yaml` blueprint format, SSH access to live services, the hosting model, and the REST API. Two helpers, `bin/render-ssh` and `bin/render-api`, are paths relative to this SKILL.md's directory. They are plain bash (need `ssh`, `curl`, optionally `jq`).
+Covers the `render.yaml` blueprint format, SSH access to live services, the hosting model, and the REST API. Two helpers, `bin/render-ssh` and `bin/render-api`, are paths relative to this SKILL.md's directory. They are plain bash (need `ssh`, `curl`, optionally `jq`). On Windows run them from Git Bash, or from PowerShell as `& "$env:ProgramFiles\Git\bin\bash.exe" <skill dir>/bin/render-api ...`, never bare (Windows opens an "Open with" dialog and hangs).
 
 ## Credentials (bring your own)
 

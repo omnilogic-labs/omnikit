@@ -276,7 +276,25 @@ export const register: Register = (on) => {
 
     const sessionId = await $.session.id();
     const id = crypto.randomUUID().slice(0, 8);
-    const dir = `${ROOT}/${sessionId}/${id}`;
+    let dir = `${ROOT}/${sessionId}/${id}`;
+
+    // Job dirs hold task text, which may carry secrets: create them 700.
+    // bash prints the dir back as the path to use from here on. On Windows,
+    // Git Bash maps /tmp to %TEMP% while $.fs maps it to C:	mp, so the job
+    // files and run-worker.sh would see two different directories; pwd -W
+    // gives C:/Users/.../Temp/..., which both read. Elsewhere it is plain pwd.
+    const made = await $.process.run([
+      "bash",
+      "-c",
+      'umask 077 && mkdir -p -- "$1" && cd -- "$1" && { pwd -W 2> /dev/null || pwd; }',
+      "_",
+      dir,
+    ]);
+    if (made.exitCode !== 0) {
+      return { deny: `external_worker could not create ${dir}: ${made.stderr.trim()}` };
+    }
+    dir = made.stdout.trim() || dir;
+
     const startedAt = await $.clock.now();
     const job: WorkerJob = {
       id,
@@ -296,11 +314,6 @@ export const register: Register = (on) => {
       endedAt: null,
     };
 
-    // Job dirs hold task text, which may carry secrets: create them 700.
-    const made = await $.process.run(["bash", "-c", 'umask 077 && mkdir -p -- "$1"', "_", dir]);
-    if (made.exitCode !== 0) {
-      return { deny: `external_worker could not create ${dir}: ${made.stderr.trim()}` };
-    }
     await $.fs.write(`${dir}/task.txt`, task);
     await $.fs.write(
       `${dir}/params`,

@@ -1,0 +1,4 @@
+# Check text files out with LF everywhere, Windows included. Git for Windows
+# defaults to core.autocrlf=true, which turns every script into CRLF: bash in
+# WSL then fails on the stray \r, and prettier --check reports every file.
+* text=auto eol=lf

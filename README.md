@@ -37,6 +37,26 @@ The installer picks every tool it finds on PATH and says which ones it skipped. 
 
 Run the installer from the main checkout, not a worktree: Claude Code's marketplace points at whichever clone ran it.
 
+### Windows
+
+Run `bash install.sh` from **Git Bash**. It works there with these prerequisites:
+
+- **Developer Mode on** (Settings, System, For developers), or an elevated Git Bash. The Codex and agy installs are symlinks, and Windows only lets a normal user create symlinks in Developer Mode. The installer checks first and stops with this advice rather than falling back. Plain `ln -s` in Git Bash would silently copy the folder instead, so the installer forces real links (`MSYS=winsymlinks:nativestrict`).
+- **Git for Windows**, **bun**, and, for `bun run verify`, **jq** (`winget install jqlang.jq`, then open a new shell).
+
+What the installer handles for you on Windows:
+
+- Git for Windows clones with `core.symlinks=false`, so the links in `skills/` arrive as small text files. The installer sets `core.symlinks=true` for the clone and checks them out again as real links. `git status` stays clean.
+- The Claude Code marketplace is added by its Windows path (`D:\...\omnikit`). An `omnikit` marketplace that points at GitHub or another clone is removed and added again from this clone.
+
+What the agents need to know, and the skills now say it where the scripts are called:
+
+- The helpers (`bin/art`, `bin/op-secret`, `bin/render-api`, `bin/render-ssh`, `scripts/wt`) are bash scripts with no extension. **Never run one directly from PowerShell or cmd.** Windows treats the file as a document and opens an "Open with" dialog, and the agent waits on a command that never finishes. Run them from Git Bash, or from PowerShell as `& "$env:ProgramFiles\Git\bin\bash.exe" <path> ...`.
+- A plain `bash` in PowerShell is often WSL (`C:\Windows\System32\bash.exe` comes first on a stock PATH), which cannot read `C:\` paths. Codex picks Git Bash on its own; agy and other PowerShell-first agents need the explicit path above.
+- Claude Code keeps `GEMINI_API_KEY` in its `settings.json` `env`, where Codex and agy cannot see it. For `artistic-vision` Gemini commands in those tools, set it as a user environment variable or follow `skills/artistic-vision/references/windows-powershell.md`.
+
+Checked on Windows 11 with Claude Code 2.1.294, Codex CLI 0.161.0, and agy 1.3.1: `bun run verify:ask` passes 17 of 17, each tool runs `art info` through its skill link, and `external_worker` completes jobs for the `fake`, `codex`, and `agy` engines.
+
 ## Verify
 
 ```bash

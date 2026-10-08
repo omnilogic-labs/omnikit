@@ -54,6 +54,11 @@ done
 say() { echo "$*" >&2; }
 has() { command -v "$1" > /dev/null 2>&1; }
 
+if ! has jq; then
+  say "error: jq not found. Install it (Windows: winget install jqlang.jq, then open a new shell)."
+  exit 1
+fi
+
 # result <pass|fail|skip> <check> <detail>
 result() {
   printf '%s\t%s\t%s\n' "$1" "$2" "$3"
@@ -119,6 +124,8 @@ check_claude() {
 
   local path stale init
   path="$(claude plugin marketplace list --json 2> /dev/null | jq -r '.[] | select(.name == "omnikit") | .path // .installLocation // empty')"
+  # On Windows claude prints D:\x\y; compare it in this shell's /d/x/y form.
+  if [ -n "$path" ] && has cygpath; then path="$(cygpath -u "$path")"; fi
   if [ "$path" = "$MAIN_ROOT" ]; then
     result pass claude-marketplace "omnikit -> $path"
   else

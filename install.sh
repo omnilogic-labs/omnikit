@@ -92,6 +92,42 @@ done
 
 has() { command -v "$1" > /dev/null 2>&1; }
 
+# Windows (Git Bash, MSYS2, Cygwin). Plain `ln -s` there silently copies the
+# directory instead of linking it, so the copy goes stale on the next edit and
+# fails the symlink test on the next run. nativestrict makes a real Windows
+# symlink or fails loudly. Real symlinks need Developer Mode (or an elevated
+# shell); Codex and agy are native Windows programs and follow them.
+IS_WINDOWS=false
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*)
+    IS_WINDOWS=true
+    export MSYS="winsymlinks:nativestrict${MSYS:+ $MSYS}"
+    export CYGWIN="winsymlinks:nativestrict${CYGWIN:+ $CYGWIN}"
+    ;;
+esac
+
+# native_path <path>: the path as Windows tools print it (D:\x\y) on Windows,
+# unchanged elsewhere.
+native_path() {
+  if $IS_WINDOWS && has cygpath; then cygpath -w "$1"; else echo "$1"; fi
+}
+
+# can_symlink: true when this shell can create a real symlink.
+can_symlink() {
+  local tmp ok=1
+  tmp="$(mktemp -d)"
+  mkdir "$tmp/target"
+  if ln -s "$tmp/target" "$tmp/link" 2> /dev/null && [ -L "$tmp/link" ]; then ok=0; fi
+  rm -rf "$tmp"
+  return "$ok"
+}
+
+windows_symlink_help() {
+  say "  Windows cannot create symlinks from this shell. Turn on Developer Mode"
+  say "  (Settings, System, For developers) or run Git Bash as administrator,"
+  say "  then re-run: bash install.sh"
+}
+
 if ! $TARGETED; then
   has claude && DO_CLAUDE=true
   if has codex || [ -d "$AGENTS_SKILLS_DIR" ]; then DO_AGENTS=true; fi
@@ -220,6 +256,33 @@ prune_dir() {
 
 skill_dirs() { find "$SKILLS_SRC" -mindepth 1 -maxdepth 1 -type d | sort; }
 
+# Git for Windows clones with core.symlinks=false, which checks the committed
+# skills/ links out as small text files holding the link target. Turn the
+# setting on for this clone and check those paths out again as real links.
+repair_git_symlinks() {
+  local placeholders=() path
+  has git || return 0
+  while IFS= read -r path; do
+    [ -n "$path" ] && [ -f "$REPO_ROOT/$path" ] && [ ! -L "$REPO_ROOT/$path" ] && placeholders+=("$path")
+  done < <(git -C "$REPO_ROOT" ls-files -s -- skills 2> /dev/null | awk '$1 == "120000" { print $4 }')
+  [ "${#placeholders[@]}" -gt 0 ] || return 0
+
+  if $CHECK; then
+    for path in "${placeholders[@]}"; do problem placeholder "$REPO_ROOT/$path"; done
+    return 0
+  fi
+  say ""
+  say "Repo skills/ holds ${#placeholders[@]} symlink(s) checked out as text files (core.symlinks=false)"
+  if ! can_symlink; then
+    windows_symlink_help
+    return 0
+  fi
+  run git -C "$REPO_ROOT" config core.symlinks true
+  $DRY_RUN || rm -f "${placeholders[@]/#/$REPO_ROOT/}"
+  run git -C "$REPO_ROOT" checkout -- "${placeholders[@]}"
+  say "  set core.symlinks=true for this clone and checked skills/ out as links"
+}
+
 # The flat skills/ directory at the repo root is how the
 # `npx skills` installer discovers the skills. It is generated, never edited.
 sync_repo_skills() {
@@ -231,6 +294,11 @@ sync_repo_skills() {
   while IFS= read -r src; do
     name="$(basename "$src")"
     names+=("$name")
+    # A placeholder that repair_git_symlinks reported or would replace.
+    if $DRY_RUN && [ -f "$dir/$name" ] && [ ! -L "$dir/$name" ] \
+      && [ "$(cat "$dir/$name")" = "../${src#"$REPO_ROOT"/}" ]; then
+      continue
+    fi
     link_into "$dir" "../${src#"$REPO_ROOT"/}" "$name"
   done < <(skill_dirs)
 
@@ -266,10 +334,23 @@ install_claude() {
     marketplaces="$(claude plugin marketplace list --json 2> /dev/null || true)"
   fi
 
+  # The marketplace must point at this clone. One added from GitHub or from
+  # another clone under the same name is replaced, or `update` would keep
+  # installing that copy. JSON escapes the backslashes in a Windows path.
+  local here
+  here="$(native_path "$REPO_ROOT")"
+  here="${here//\\/\\\\}"
   if grep -Eq "\"name\": *\"$MARKETPLACE\"" <<< "$marketplaces"; then
-    run claude plugin marketplace update "$MARKETPLACE"
+    if grep -qF "\"$here\"" <<< "$marketplaces"; then
+      run claude plugin marketplace update "$MARKETPLACE"
+    else
+      say "  marketplace $MARKETPLACE points elsewhere; re-adding it from this clone"
+      run claude plugin marketplace remove "$MARKETPLACE"
+      run claude plugin marketplace add "$(native_path "$REPO_ROOT")"
+      $DRY_RUN || plugins="$(claude plugin list --json 2> /dev/null || true)"
+    fi
   else
-    run claude plugin marketplace add "$REPO_ROOT"
+    run claude plugin marketplace add "$(native_path "$REPO_ROOT")"
   fi
 
   # Plugins from earlier versions of this marketplace (one per skill group).
@@ -378,6 +459,13 @@ if $DEPS; then
   fi
 fi
 
+if $IS_WINDOWS && ! $CHECK && ! $DRY_RUN && ! can_symlink; then
+  say ""
+  windows_symlink_help
+  exit 1
+fi
+
+repair_git_symlinks
 sync_repo_skills
 
 # skipped <tool> <binary>: says a target was not chosen because its CLI is

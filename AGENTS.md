@@ -30,6 +30,9 @@ Cross-platform agent skills by Omnilogic Labs, for Claude Code, Codex, and Antig
 - Never use em dashes or en dashes.
 - SKILL.md bodies at most 150 lines, descriptions at most 300 chars; enforced by `bun run budget` or `scripts/skill-stats.sh --strict`.
 - Scripts use #!/bin/bash with set -e; status to stderr, output to stdout.
+- Windows: where a SKILL.md tells the agent to run a bash helper, say to run it from Git Bash, or from PowerShell via `& "$env:ProgramFiles\Git\bin\bash.exe"`, never bare (an extensionless file opens an "Open with" dialog and hangs the agent). See README, Windows.
+- A script that finds files relative to itself resolves its path with `realpath "$0"` first: Codex and agy reach it through a symlink, and Git Bash's `cd -P` resolves only the last component.
+- Paths handed to `$.fs` in hooks are resolved by the engine, so `/tmp/x` is `<current drive>:\tmp\x` on Windows while bash sees `%TEMP%\x`. Share one path between them by having bash print it (`pwd -W` in Git Bash).
 - Version bumps update both marketplace.json and plugin.json.
 - Use `bun`, never npm or pnpm. After adding or renaming a skill, run `bash install.sh`.
 - After changing skills, agents, or install.sh, run `bun run verify` (`bun run verify:ask` also asks each tool's model).

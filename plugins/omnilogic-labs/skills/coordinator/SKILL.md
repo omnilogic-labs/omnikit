@@ -99,7 +99,7 @@ blocked and why, and the exact decision or credential you need.
 ## Worktree helper
 
 `scripts/wt` (in this SKILL.md's directory, not the repo root `scripts/`) creates, lists, merges, and removes one worktree per task. Status goes to stderr and data to
-stdout, so `scripts/wt list` is safe to parse.
+stdout, so `scripts/wt list` is safe to parse. It is bash: on Windows run it from Git Bash, or from PowerShell as `& "$env:ProgramFiles\Git\bin\bash.exe" <skill dir>/scripts/wt ...`, never bare.
 
 - `create <name> [base]` makes `<root>/<name>` on branch `<prefix><name>` and prints its path.
 - `list` prints name, branch, clean or dirty, commits ahead, and path.

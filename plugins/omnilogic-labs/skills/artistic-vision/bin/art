@@ -13,7 +13,12 @@
 # Status goes to stderr. Machine output on stdout belongs to the CLI alone.
 set -e
 
-BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Resolve symlinks first. Codex and agy reach this file through a link in
+# ~/.agents/skills or ~/.gemini/config/skills; from the link path the walk below
+# never reaches the repo root node_modules and the deps get reinstalled here.
+# realpath, not cd -P: Git Bash's cd -P resolves only the last path component.
+BIN_DIR="$(dirname "$(realpath "$0" 2> /dev/null || echo "$0")")"
+BIN_DIR="$(cd -P "$BIN_DIR" && pwd)"
 SCRIPTS_DIR="$BIN_DIR/../scripts"
 ENTRY="$SCRIPTS_DIR/index.ts"
 

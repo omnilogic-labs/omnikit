@@ -6,6 +6,11 @@ import type { WorkerJob } from "../types";
 const SESSION = "sess-1234";
 const TOOL = "mcp__omnilogic-labs__external_worker";
 
+// On Windows the engine resolves $.fs paths against the current drive before
+// the hooks below see them (/repo arrives as D:\repo), so the in-memory
+// filesystem keys on the path with the drive and backslashes taken out.
+const key = (path: string) => path.replace(/^[A-Za-z]:/, "").replaceAll("\\", "/");
+
 // The world beneath the plugin: an in-memory filesystem with one real
 // directory, a session id, and a Bash tool that records the call.
 function world(on: On, options: { denyBash?: boolean } = {}) {
@@ -24,16 +29,16 @@ function world(on: On, options: { denyBash?: boolean } = {}) {
     },
   }));
   on("fs.write", async (_$, e) => {
-    files.set(e.path, e.text);
+    files.set(key(e.path), e.text);
     return { value: undefined };
   });
   on("fs.read", async (_$, e) => {
-    const text = files.get(e.path);
+    const text = files.get(key(e.path));
     if (text === undefined) return { deny: `ENOENT ${e.path}` };
     return { value: text };
   });
   on("fs.stat", async (_$, e) => {
-    if (e.path !== "/repo") return { deny: `ENOENT ${e.path}` };
+    if (key(e.path) !== "/repo") return { deny: `ENOENT ${e.path}` };
     return { value: { kind: "dir" as const, size: 0, mtimeMs: 0, isLink: false } };
   });
   on("ui.toast", async (_$, e) => {
