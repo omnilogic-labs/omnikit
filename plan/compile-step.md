@@ -225,11 +225,12 @@ src/skills/plain-writing/SKILL.md` it exits 1 and prints a `stale-build` line (r
 
 - **Goal:** Replace the hand-written per-host prose in the coordinator skill and agents with templated blocks, make
   the role prompts findable from every tree, add the commit-and-clean-up lifecycle for plans and the ledger, and
-  remove the em dashes from artistic-vision's extract.ts.
-- **Files:** `src/skills/coordinator/`, `src/agents/`, `src/skills/artistic-vision/scripts/extract.ts`,
+  remove the em and en dashes from the artistic-vision scripts and onepassword's op-secret.
+- **Files:** `src/skills/coordinator/`, `src/agents/`, `src/skills/artistic-vision/scripts/`,
+  `src/skills/onepassword/bin/op-secret`,
   `scripts/build/build.ts` and `scripts/build/build.test.ts` (role-prompt emit only), and the regenerated
-  `plugins/omnilogic-labs/skills/{coordinator,artistic-vision}/`, `plugins/omnilogic-labs/agents/` and
-  `skills/{coordinator,artistic-vision}/`.
+  `plugins/omnilogic-labs/skills/{coordinator,artistic-vision,onepassword}/`, `plugins/omnilogic-labs/agents/`
+  and `skills/{coordinator,artistic-vision,onepassword}/`.
 - **Steps:**
   - Host prose: in `SKILL.md` Roles, and in `references/hosts.md`, wrap the Claude Code, Codex and agy sections in
     `@if` blocks and write model names as `{{tier.deep}}`/`{{tier.fast}}` and tool names as `{{tool.*}}`. Codex
@@ -247,8 +248,9 @@ src/skills/plain-writing/SKILL.md` it exits 1 and prints a `stale-build` line (r
     section: when every task is `merged` and the milestone review passes, report to the owner, `git rm` the plan
     files (including side files such as `plan/*-facts.md`), reset LEDGER.md to the empty template from
     `references/ledger-template.md`, and commit, so only the base branch, an empty ledger and no plans remain.
-  - extract.ts (finding b): replace the em dashes in `src/skills/artistic-vision/scripts/extract.ts` with plain
-    punctuation, without changing behaviour.
+  - Dashes (finding b): replace every em and en dash in `src/skills/artistic-vision/scripts/` and
+    `src/skills/onepassword/bin/op-secret` with plain punctuation, without changing behaviour. Leave
+    `src/skills/plain-writing/references/rewrites.md` alone: its dash is a deliberate "before" example.
   - Keep every generated SKILL.md and platform file within budget (SKILL.md body at most 150 lines).
 - **Tier:** deep
 - **Depends on:** migrate-sources, portable-tree
@@ -275,7 +277,8 @@ dist/*/skills/coordinator skills/coordinator` prints nothing.
      the plan files including side files, resetting LEDGER.md from `references/ledger-template.md`, and a commit.
      The loop's plan step says to commit the plan and LEDGER.md to the base branch and to commit them as they
      change (inspect the text).
-  10. `grep -rnP '[\x{2013}\x{2014}]' src skills plugins/omnilogic-labs/skills` prints nothing.
+  10. `grep -rnP '[\x{2013}\x{2014}]' src skills plugins/omnilogic-labs/skills | grep -v '/plain-writing/references/rewrites\.md:'`
+      prints nothing (exempts only `src/skills/plain-writing/references/rewrites.md` and its generated copies).
   11. `bash scripts/skill-stats.sh --strict` exits 0, and `awk 'f>=2; /^---$/{f++}'
 plugins/omnilogic-labs/skills/coordinator/SKILL.md | wc -l` is 150 or less.
   12. `bun run check && bun run verify` passes.

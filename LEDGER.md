@@ -13,16 +13,16 @@ report, merge and block, so a fresh context can resume from this file alone.
 
 States: planned, building, verifying, fixing (round n), passed, merged, blocked.
 
-| Task            | Depends on                | State     | Branch/worktree | Notes                                                                                                                                                                                                       |
-| --------------- | ------------------------- | --------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| host-facts      | none                      | verifying | wave/host-facts | sonnet; built e215fcc; Codex TOML agents load (spawn_agent agent_type); unknown keys ok on both; link Codex skills into one dir only; agy invalid model = agent vanishes; codex exec/agy -p need </dev/null |
-| compiler        | none                      | passed    | wave/compiler   | opus; PASS 6/6 (verify link checks only meaningful on main); check+exec bits not compared by --check                                                                                                        |
-| migrate-sources | compiler                  | planned   |                 | sonnet; wave 2                                                                                                                                                                                              |
-| os-axis         | compiler                  | planned   |                 | opus; wave 2; owns scripts/build/os.ts + render changes                                                                                                                                                     |
-| portable-tree   | migrate-sources           | planned   |                 | opus; wave 3                                                                                                                                                                                                |
-| install-verify  | portable-tree, host-facts | planned   |                 | opus; wave 4                                                                                                                                                                                                |
-| host-prose      | portable-tree             | planned   |                 | opus; wave 4                                                                                                                                                                                                |
-| docs            | wave 4                    | planned   |                 | sonnet; wave 5; after wave 4 lands, run bash install.sh on main                                                                                                                                             |
+| Task            | Depends on                | State                                                                        | Branch/worktree     | Notes                                                                                                                                                                                                       |
+| --------------- | ------------------------- | ---------------------------------------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| host-facts      | none                      | verifying                                                                    | wave/host-facts     | sonnet; built e215fcc; Codex TOML agents load (spawn_agent agent_type); unknown keys ok on both; link Codex skills into one dir only; agy invalid model = agent vanishes; codex exec/agy -p need </dev/null |
+| compiler        | none                      | passed                                                                       | wave/compiler       | opus; PASS 6/6 (verify link checks only meaningful on main); check+exec bits not compared by --check                                                                                                        |
+| migrate-sources | compiler                  | planned                                                                      |                     | sonnet; wave 2                                                                                                                                                                                              |
+| os-axis         | compiler                  | planned                                                                      |                     | opus; wave 2; owns scripts/build/os.ts + render changes                                                                                                                                                     |
+| portable-tree   | migrate-sources           | planned                                                                      |                     | opus; wave 3                                                                                                                                                                                                |
+| install-verify  | portable-tree, host-facts | passed (crit 6 + Claude verify lines deferred to main after real install.sh) | wave/install-verify | opus; built 44b2e26                                                                                                                                                                                         |
+| host-prose      | portable-tree             | fixing (round 1, plan scope)                                                 | wave/host-prose     | opus; built 26be7bb; 11/12 pass; crit 10 dash scope being amended; follow-up: agy can invoke installed agents by name                                                                                       |
+| docs            | wave 4                    | planned                                                                      |                     | sonnet; wave 5; after wave 4 lands, run bash install.sh on main                                                                                                                                             |
 
 Notes hold the model used, the verify result in one line (for example `PASS 3/3` or `FAIL 2: criterion 4`), the
 merge commit, and anything the next wave needs.
@@ -32,8 +32,7 @@ merge commit, and anything the next wave needs.
 One line per live worker: role, task, model, and the id or name the host gave it. Remove the line when the worker
 reports. Check this list before dispatching, so no task gets two workers.
 
-- builder, install-verify, opus
-- builder, host-prose, opus
+- builder, host-prose fix round 1, opus
 - planner, amend plan for portable root skills/, opus
 
 ## Waves
