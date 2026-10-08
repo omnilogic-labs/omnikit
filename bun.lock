@@ -12,7 +12,7 @@
     "plugins/omnilogic-labs/skills/agent-browser": {
       "name": "agent-browser-skill",
       "dependencies": {
-        "agent-browser": "^0.33.1",
+        "agent-browser": "^0.38.2",
       },
     },
     "plugins/omnilogic-labs/skills/artistic-vision": {
@@ -107,7 +107,7 @@
 
     "agent-base": ["agent-base@7.1.4", "", {}, "sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ=="],
 
-    "agent-browser": ["agent-browser@0.33.1", "", { "bin": { "agent-browser": "./bin/agent-browser.js" } }, "sha512-lS0KbU9QdkD0I2n+uzrmNXKNGRjsd6GcB7bR6Wm1eyLcaxTCSf2zuxbWzf76fHCrDA4YoY3TikoOMSA8qA+wFA=="],
+    "agent-browser": ["agent-browser@0.38.2", "", { "bin": { "agent-browser": "./bin/agent-browser.js" } }, "sha512-b/7hvo2RrqocvybjB9kwpX12kGkxkFvtdJ4XPDoott5TLK2n3aPX+lYg7ALd+2YvPi2LrTKGzQYu/rxZC2Y7ZA=="],
 
     "agent-browser-skill": ["agent-browser-skill@workspace:plugins/omnilogic-labs/skills/agent-browser"],
 

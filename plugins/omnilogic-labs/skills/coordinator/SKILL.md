@@ -17,11 +17,11 @@ do that in their own contexts and send back short reports.
 
 1. **You are the coordinator. Keep your context small.** Do not read code, plans, diffs, or long outputs
    yourself, even to plan. Dispatch a worker to plan, implement, or verify, and read only its short reply.
-2. **Planners always use the strongest model.** A plan always ends with acceptance criteria: numbered, each
+2. **Planners always use the deep tier.** A plan always ends with acceptance criteria: numbered, each
    objectively checkable, each naming the command or inspection that verifies it.
-3. **Builders use the fast model for rote or straightforward work, and the strongest model for complicated
+3. **Builders use the fast tier for rote or straightforward work, and the deep tier for complicated
    implementations.** Each builder works in its own git worktree.
-4. **Verifiers use the fast model per task, and the strongest model for a milestone review.** A verifier reports
+4. **Verifiers use the fast tier per task, and the deep tier for a milestone review.** A verifier reports
    PASS, FAIL, or UNVERIFIED for each criterion. UNVERIFIED never counts as passed.
 5. **Two FAILs on a task mean the planner rescopes it.** Do not send it to a builder a third time.
 6. **Integrate one wave at a time.** Merge the wave, run the repo check command, then fast-forward the base
@@ -33,13 +33,14 @@ do that in their own contexts and send back short reports.
 ## Roles
 
 The role prompts live in the plugin's `agents/` folder: `planner.md`, `builder.md`, and `verifier.md`. How to
-dispatch each role on your host, and which model to pick, is in `references/hosts.md`. Read it once at the start.
+dispatch each role on your host is in `references/hosts.md`. `deep` and `fast` are tiers, not model names;
+`references/models.md` maps them to each host's models. Read both once at the start.
 
-| Role     | Model                                          | Writes                                        |
-| -------- | ---------------------------------------------- | --------------------------------------------- |
-| planner  | strongest, always                              | plans, rescoped plans, milestone reviews      |
-| builder  | fast for rote work; strongest for complex work | code on its own branch, in its own worktree   |
-| verifier | fast per task; strongest for milestone review  | a PASS / FAIL / UNVERIFIED line per criterion |
+| Role     | Tier                                      | Writes                                        |
+| -------- | ----------------------------------------- | --------------------------------------------- |
+| planner  | deep, always                              | plans, rescoped plans, milestone reviews      |
+| builder  | fast for rote work; deep for complex work | code on its own branch, in its own worktree   |
+| verifier | fast per task; deep for milestone review  | a PASS / FAIL / UNVERIFIED line per criterion |
 
 ## Setup
 
@@ -56,7 +57,7 @@ dispatch each role on your host, and which model to pick, is in `references/host
    with the file path, the task list, and the waves. Record each task as `planned` in the ledger.
 2. **Build.** For each task in the current wave whose dependencies are `merged`, up to max lanes at once:
    - create a worktree with `scripts/wt create <task>` (`scripts/` is relative to this SKILL.md's directory, not the repo root), which prints its path;
-   - pick the model: fast for rote work, strongest for anything complicated;
+   - pick the tier the plan gives: fast for rote work, deep for anything complicated;
    - dispatch a builder with the plan path, the task name, and the worktree path;
    - mark the task `building`.
 3. **Verify.** When a builder reports done, dispatch a verifier on the same worktree and mark the task
@@ -74,7 +75,7 @@ dispatch each role on your host, and which model to pick, is in `references/host
    If `wt merge` refuses because two branches touched the same files, have a builder resolve it in the
    integration worktree.
 
-7. **Review.** At a milestone, dispatch a verifier on the strongest model to check the milestone's criteria on
+7. **Review.** At a milestone, dispatch a verifier on the deep tier to check the milestone's criteria on
    the integrated base branch.
 8. **Repeat** with the next wave. Push only as the push policy says.
 
@@ -111,5 +112,6 @@ The defaults are `../<repo>-worktrees/<name>` on `wave/<name>`; `.agents/coordin
 ## References
 
 - `references/hosts.md`: how to dispatch each role, by host.
+- `references/models.md`: which model each tier means on each host.
 - `references/ledger-template.md`: the starting LEDGER.md.
 - `references/config.md`: the `.agents/coordinator.md` settings.

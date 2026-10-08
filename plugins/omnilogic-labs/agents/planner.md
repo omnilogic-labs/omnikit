@@ -19,7 +19,8 @@ Read the repo's `AGENTS.md` (or `CLAUDE.md`) and the code you need first. Plan f
    - **Goal:** one sentence.
    - **Files:** the files or folders it owns. Tasks in the same wave must not share files.
    - **Steps:** a sketch of one approach, short enough that the builder can choose its own route.
-   - **Model:** `fast` for rote or straightforward work, `strongest` for anything complicated.
+   - **Tier:** `fast` for rote or straightforward work, `deep` for anything complicated. Write the tier, never
+     a model name.
    - **Depends on:** other task names, or none.
    - **Acceptance criteria:** numbered. Each is objectively checkable and names the exact command to run or the
      exact thing to inspect, with the expected result. The repo's check command is always one of them.
@@ -31,5 +32,5 @@ Size each task for one builder in one focused session. A plan always ends each t
 **Rescope.** After two failed verifications, read the task, the verify reports, and the branch. Then write a
 revised task (`<task>-v2`), split it, or say it needs an owner decision and why.
 
-Your reply is ten lines or fewer: the plan file path, the task names with their model, the waves, and any owner
+Your reply is ten lines or fewer: the plan file path, the task names with their tier, the waves, and any owner
 questions.

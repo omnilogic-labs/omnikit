@@ -7,19 +7,21 @@ should read the file and pass its body (everything after the frontmatter) as the
 Every dispatch prompt names three things: the plan file, the task name, and the worktree path. Ask for a reply of
 ten lines or fewer.
 
-| Role     | Model choice                                               |
-| -------- | ---------------------------------------------------------- |
-| planner  | strongest, always                                          |
-| builder  | fast for rote or straightforward work; strongest otherwise |
-| verifier | fast per task; strongest for a milestone review            |
+| Role     | Tier                                                  |
+| -------- | ----------------------------------------------------- |
+| planner  | deep, always                                          |
+| builder  | fast for rote or straightforward work; deep otherwise |
+| verifier | fast per task; deep for a milestone review            |
+
+`models.md` gives the model name for each tier on each host.
 
 ## Claude Code
 
 - Dispatch with the Agent tool, `subagent_type: "omnilogic-labs:<role>"` (for example
   `omnilogic-labs:builder`).
-- Set `model` on the call: `opus` for the strongest, `sonnet` for the fast model. The agent files default to
-  `opus` for the planner and `sonnet` for the builder and verifier, so override the model only for a complicated
-  build or a milestone review.
+- Set `model` on the call to the tier's Claude Code model from `models.md`. The agent files already default to
+  the deep tier for the planner and the fast tier for the builder and verifier, so override the model only for a
+  complicated build or a milestone review.
 - Run independent workers in one message so they run in parallel. Long ones can run in the background; you are
   notified when they finish.
 - Do not use `isolation: "worktree"` or `EnterWorktree`. Builders work in the worktree `scripts/wt` made.
@@ -29,17 +31,16 @@ ten lines or fewer.
 ## Codex
 
 - Codex does not load plugin agents. Read `../../agents/<role>.md` and use its body as the role prompt.
-- Dispatch with its subagent spawn tool (`spawn_agent`), then wait for results with its wait tool. Pick the
-  strongest model your account has for the planner and complicated builds, and a faster one otherwise.
+- Dispatch with its subagent spawn tool (`spawn_agent`), then wait for results with its wait tool. Pick each
+  worker's model and effort from the Codex column of `models.md`.
 - Without spawn tools, run a worker as a separate process from inside the worktree:
-  `codex exec -C <worktree> --sandbox workspace-write "<role prompt + task>"`.
+  `codex exec -C <worktree> --sandbox workspace-write -m <model> "<role prompt + task>"`.
 - Do not use Codex's own worktree mode. Builders work in the worktree `scripts/wt` made.
 
 ## Antigravity (agy)
 
 - Read `../../agents/<role>.md` and use its body as the role prompt.
-- Dispatch with `invoke_subagent`. Use the pro model for the planner and for a milestone review, and the flash
-  model for builders and verifiers. Use pro for a complicated build.
+- Dispatch with `invoke_subagent`. Pick each worker's model from the agy column of `models.md`.
 - Use the workspace mode that inherits the current directory, and point the worker at its worktree path. Do not
   use a mode that makes its own branch.
 
