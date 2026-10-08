@@ -112,6 +112,8 @@ export function registerEdit(program: Command): void {
       if (attempts > 1 && opts.judge) {
         let bestScore = -1;
         let bestFile = "";
+        let firstFile = "";
+        let judgeError = "";
         const tempFiles: string[] = [];
 
         for (let i = 1; i <= attempts; i++) {
@@ -124,16 +126,25 @@ export function registerEdit(program: Command): void {
             log.warn(`Attempt ${i} failed to produce an image.`);
             continue;
           }
+          if (!firstFile) firstFile = tempPath;
 
-          const result = await judgeImage(tempPath, opts.judge, loadImageAsBase64);
-          log.info(`  Score: ${result.score}/10 — ${result.reasoning}`);
+          // A judge that will not answer must not cost the user renders they
+          // have already paid for: keep going and fall back to attempt one.
+          try {
+            const result = await judgeImage(tempPath, opts.judge, loadImageAsBase64);
+            log.info(`  Score: ${result.score}/10 — ${result.reasoning}`);
 
-          if (result.score > bestScore) {
-            bestScore = result.score;
-            bestFile = tempPath;
+            if (result.score > bestScore) {
+              bestScore = result.score;
+              bestFile = tempPath;
+            }
+          } catch (e) {
+            judgeError = (e as Error).message;
+            log.warn(`  Judging attempt ${i} failed: ${judgeError}`);
           }
         }
 
+        if (!bestFile) bestFile = firstFile;
         if (!bestFile) {
           log.error("All attempts failed to produce an image.");
           process.exit(1);
@@ -143,7 +154,11 @@ export function registerEdit(program: Command): void {
         for (const f of tempFiles) {
           if (existsSync(f)) unlinkSync(f);
         }
-        log.success(`Best score: ${bestScore}/10`);
+        if (bestScore >= 0) {
+          log.success(`Best score: ${bestScore}/10`);
+        } else {
+          log.warn(`Judging unavailable (${judgeError}). Kept the first attempt unjudged.`);
+        }
       } else {
         const ok = await editOnce(input, output, instruction, model, refs, imageConfig);
         if (!ok) {

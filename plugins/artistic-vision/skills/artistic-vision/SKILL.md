@@ -172,10 +172,11 @@ by measuring pixels rather than by eye.
 
 ### `--judge` is a hint, not a gate
 
-`--attempts N --judge` scores using the image model to emit structured JSON,
-which intermittently returns nothing parseable and **aborts the whole run**,
-discarding the attempts it already paid for. For anything that matters, generate
-N candidates in a shell loop and evaluate them yourself.
+`--attempts N --judge` renders N candidates and scores each one with the text
+model (`gemini-3.8-flash`); the image models cannot score anything, because they
+answer a JSON request with another image. A score is one model's opinion, so
+treat it as a hint. If judging fails, the run still writes the best attempt it
+has and warns, rather than discarding renders you already paid for.
 
 ### Transparent Backgrounds: Not Supported Directly
 
@@ -257,6 +258,7 @@ Pick a key color that does not occur in the subject, and verify the cut with `--
 - **Default: Flash** (`gemini-3.1-flash-image-preview`): fast, near-Pro quality, used for all operations.
 - **Pro** (`gemini-3-pro-image-preview`): highest fidelity, only when the user explicitly requests high quality.
 - Pass `--model gemini-3-pro-image-preview` explicitly for maximum quality.
+- Anything that answers in JSON (`--judge`, `ocr`, `detect`, `analyze`, `diff`, `sheet`) runs on the text model `gemini-3.8-flash`. An image model passed to those commands is redirected to it, since image models ignore a response schema and return an image.
 
 ## Examples
 

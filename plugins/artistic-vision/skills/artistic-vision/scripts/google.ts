@@ -6,6 +6,7 @@
  */
 
 import { GoogleGenAI, type Part } from "@google/genai";
+import { log } from "./log";
 
 export { type Part };
 
@@ -24,6 +25,21 @@ export const IMAGEN_MODEL = "gemini-3.1-flash-image-preview";
 
 /** Gemini 3 Pro Image — highest fidelity. Use only when user explicitly requests high quality. */
 export const IMAGEN_PRO_MODEL = "gemini-3-pro-image-preview";
+
+/**
+ * Gemini 3.8 Flash, the text model behind anything that has to answer in words
+ * or JSON.
+ *
+ * The image models cannot do it. They accept responseMimeType and
+ * responseSchema without complaint, then reply with a single inlineData image
+ * part and no text at all, which is what used to abort a judged run.
+ */
+export const VISION_MODEL = "gemini-3.8-flash";
+
+/** Image-only models, which answer with a picture whatever the config asks for. */
+function isImageOnlyModel(model: string): boolean {
+  return model.includes("-image");
+}
 
 /**
  * Aspect ratios accepted by ImageConfig.aspectRatio.
@@ -132,8 +148,15 @@ export async function generateStructuredContent<T>(
   jsonSchema: object
 ): Promise<T> {
   const ai = getGoogleAI();
+  // Send the request to a text model even when the caller named an image one:
+  // the schema is ignored by the image models, and an image comes back instead.
+  const textModel = isImageOnlyModel(model) ? VISION_MODEL : model;
+  if (textModel !== model) {
+    log.dim(`${model} cannot return JSON, asking ${textModel} instead`);
+  }
+
   const response = await ai.models.generateContent({
-    model,
+    model: textModel,
     contents: [{ role: "user", parts }],
     config: {
       responseMimeType: "application/json",
@@ -143,14 +166,17 @@ export async function generateStructuredContent<T>(
 
   const text = extractTextFromResponse(response);
   if (!text) {
-    throw new Error("No response from model");
+    const reason = response.candidates?.[0]?.finishReason;
+    throw new Error(
+      `No text in ${textModel} response${reason ? ` (finishReason: ${reason})` : ""}`
+    );
   }
   return JSON.parse(text) as T;
 }
 
 /**
  * Judge an image against criteria and return a score.
- * Always uses Flash model for speed/cost.
+ * Always uses the Flash text model: it reads images and can return JSON.
  */
 export async function judgeImage(
   imagePath: string,
@@ -159,7 +185,7 @@ export async function judgeImage(
 ): Promise<{ score: number; reasoning: string }> {
   const { base64, mimeType } = loadImage(imagePath);
   return generateStructuredContent<{ score: number; reasoning: string }>(
-    IMAGEN_MODEL,
+    VISION_MODEL,
     [
       { inlineData: { data: base64, mimeType } },
       {
