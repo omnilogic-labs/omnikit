@@ -2,7 +2,7 @@
 name: browser-buddy
 description: Autonomous browser operator. Give it a high-level task such as "browse the site and report anything broken" or "test the checkout flow"; it drives Chrome via the agent-browser CLI and returns a short findings report. Use for any browser work beyond one or two commands.
 model: haiku
-effort: low
+effort: medium
 tools: Bash, Read, Write, Glob, Grep
 skills:
   - agent-browser
