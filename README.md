@@ -45,7 +45,7 @@ bun run verify       # install.sh --check, Claude Code plugin state and init eve
 bun run verify:ask   # the same, plus one model query each to claude, codex, and agy
 ```
 
-Success is exit 0 and a last stdout line like `summary pass=19 fail=0 skip=0`. Each check prints one `pass`, `fail`, or `skip` line. What each tool should see:
+Success is exit 0 and a last stdout line of `summary pass=14 fail=0 skip=0` (`pass=17` with `--ask`; a tool not on PATH counts as `skip`). Each check prints one `pass`, `fail`, or `skip` line. What each tool should see:
 
 - Claude Code: 7 skills and 5 agents, all named `omnilogic-labs:<name>`, no unprefixed copies, and the `mcp__omnilogic-labs__external_worker` tool. The script reads the `system/init` event of `claude -p --output-format stream-json --verbose`, which lists `skills`, `agents`, `plugins`, and `tools`.
 - Codex: the 7 skills, shown as `omnilogic-labs:<name>` because the links resolve into the plugin. Ask with `codex exec -s read-only "list your skills" </dev/null`.

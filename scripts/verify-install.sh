@@ -62,7 +62,8 @@ result() {
     fail) n_fail=$((n_fail + 1)) ;;
     skip) n_skip=$((n_skip + 1)) ;;
   esac
-  say "  $1  $2: $3"
+  # When stdout is the terminal too, the TSV line already shows there.
+  [ -t 1 ] || say "  $1  $2: $3"
 }
 
 # The main checkout, even when this runs from a git worktree. The installed
@@ -255,6 +256,12 @@ ask() {
     result fail "$check" "$bin exited non-zero: $(tail -1 "$out.err")"
     return 0
   fi
+  # claude --output-format json wraps the answer; show the text itself.
+  if [ "$bin" = claude ]; then
+    jq -r '.result // empty' "$out" > "$out.text" 2> /dev/null || cp "$out" "$out.text"
+    mv "$out.text" "$out"
+  fi
+  sed 's/^/    | /' "$out" >&2
   missing="$(missing_from "$out" "" "${SKILLS[@]}")"
   if [ -z "$missing" ]; then
     result pass "$check" "all ${#SKILLS[@]} skills named"
@@ -267,10 +274,6 @@ check_ask() {
   say ""
   say "Model queries"
   ask ask-claude claude claude -p "$QUESTION" --output-format json --no-session-persistence
-  if [ -s "$SCRATCH/ask-claude.txt" ]; then
-    jq -r '.result // empty' "$SCRATCH/ask-claude.txt" > "$SCRATCH/ask-claude.result" 2> /dev/null || true
-    say "$(sed 's/^/    /' "$SCRATCH/ask-claude.result")"
-  fi
   ask ask-codex codex codex exec -s read-only "$QUESTION"
   ask ask-agy agy agy -p "$QUESTION" --mode plan --sandbox
 }

@@ -390,8 +390,8 @@ fi
 if $DEPS; then
   say ""
   if has bun; then
-    clean_nested_modules
     say "Installing workspace dependencies (bun install)"
+    clean_nested_modules
     if $DRY_RUN; then
       run bun install
     else
