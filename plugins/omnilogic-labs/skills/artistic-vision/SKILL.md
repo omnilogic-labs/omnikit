@@ -40,18 +40,18 @@ Gemini-powered (API calls):
 
 Sharp-powered (local, no API, instant):
 
-| Subcommand                   | What it does                                    |
-| ---------------------------- | ----------------------------------------------- |
-| `info <image>`               | Dimensions, format, channels, file size         |
-| `resize <in> <out> <dims>`   | WxH, W, xH or N%; lone W/H keeps aspect         |
-| `upscale <in> <out> <scale>` | Nearest-neighbor 2x, 3x, 4x, 8x                 |
-| `crop <in> <out> <x,y,w,h>`  | Crop to coordinates                             |
-| `palette <image>`            | Hex colors with frequency                       |
-| `optimize <in> <out>`        | Smart format, quality and size                  |
-| `convert <in> <out>`         | PNG, JPEG, WebP, AVIF (from extension)          |
-| `key <in> <out>`             | Chroma-key green or magenta to real alpha       |
-| `sheet split\|assemble`      | Split or build sprite sheets                    |
-| `sheet analyze <img>`        | Frame detection and animation type (Gemini)     |
+| Subcommand                   | What it does                                |
+| ---------------------------- | ------------------------------------------- |
+| `info <image>`               | Dimensions, format, channels, file size     |
+| `resize <in> <out> <dims>`   | WxH, W, xH or N%; lone W/H keeps aspect     |
+| `upscale <in> <out> <scale>` | Nearest-neighbor 2x, 3x, 4x, 8x             |
+| `crop <in> <out> <x,y,w,h>`  | Crop to coordinates                         |
+| `palette <image>`            | Hex colors with frequency                   |
+| `optimize <in> <out>`        | Smart format, quality and size              |
+| `convert <in> <out>`         | PNG, JPEG, WebP, AVIF (from extension)      |
+| `key <in> <out>`             | Chroma-key green or magenta to real alpha   |
+| `sheet split\|assemble`      | Split or build sprite sheets                |
+| `sheet analyze <img>`        | Frame detection and animation type (Gemini) |
 
 Every option, flag and example is in [references/commands.md](references/commands.md).
 
