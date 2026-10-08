@@ -1,15 +1,18 @@
 // Compile src/{skills,agents} into the Claude plugin tree and the Codex and agy trees.
 //
-//   bun scripts/build/build.ts [--src src] [--out .] [--check]
+//   bun scripts/build/build.ts [--src src] [--out .] [--os linux|wsl|macos|windows|any] [--check]
 //
-// --check builds into a temp dir and exits 1, listing every path whose content differs from the
-// Claude tree under --out.
+// Committed trees (the Claude plugin) always render any-OS: every OS block is kept under its label
+// line. The machine-local trees (dist/<host>) render for --os (default any), and record it in
+// dist/<host>/.os. --check builds into a temp dir and exits 1, listing every path whose content
+// differs from the committed Claude tree under --out.
 
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
 import * as prettier from "prettier";
 import { HOSTS, HOST_NAMES, type Host, type HostName, type Tier, varsFor } from "./hosts";
+import { OS_TARGETS, type OsTarget, isOsTarget } from "./os";
 import {
   filterFrontmatter,
   formatError,
@@ -70,6 +73,26 @@ async function subdirs(dir: string): Promise<string[]> {
   }
 }
 
+/** True for trees built on the user's machine (dist/, gitignored); false for committed trees. */
+export function isLocalTree(host: Host): boolean {
+  return host.root.startsWith("dist/");
+}
+
+/** Committed trees render any-OS; local trees render for the OS install.sh detected. */
+export function osForHost(host: Host, os: OsTarget): OsTarget {
+  return isLocalTree(host) ? os : "any";
+}
+
+function renderFor(text: string, name: HostName, os: OsTarget, file: string) {
+  return render(text, {
+    host: name,
+    os: osForHost(HOSTS[name], os),
+    vars: varsFor(name),
+    file,
+    hosts: HOST_NAMES,
+  });
+}
+
 function lineOfKey(text: string, key: string): number {
   const i = text.split("\n").findIndex((l) => l.startsWith(`${key}:`));
   return i < 0 ? 1 : i + 1;
@@ -77,7 +100,7 @@ function lineOfKey(text: string, key: string): number {
 
 // ---------- skills ----------
 
-async function buildSkills(src: string, out: Outputs, errors: RenderError[]) {
+async function buildSkills(src: string, os: OsTarget, out: Outputs, errors: RenderError[]) {
   const root = join(src, "skills");
   for (const skill of await subdirs(root)) {
     const dir = join(root, skill);
@@ -94,7 +117,7 @@ async function buildSkills(src: string, out: Outputs, errors: RenderError[]) {
           out.set(dest, { data: new Uint8Array(bytes), mode: s.mode });
           continue;
         }
-        const r = render(text, name, varsFor(name), file, HOST_NAMES);
+        const r = renderFor(text, name, os, file);
         if (!r.ok) {
           errors.push(...r.errors);
           continue;
@@ -230,7 +253,7 @@ export function emitAgent(
   return out;
 }
 
-async function buildAgents(src: string, out: Outputs, errors: RenderError[]) {
+async function buildAgents(src: string, os: OsTarget, out: Outputs, errors: RenderError[]) {
   const dir = join(src, "agents");
   const files = (await walk(dir)).filter((f) => f.endsWith(".md") && !f.includes("/"));
   for (const rel of files) {
@@ -238,7 +261,7 @@ async function buildAgents(src: string, out: Outputs, errors: RenderError[]) {
     const text = await readFile(file, "utf8");
     const role = rel.replace(/\.md$/, "");
     for (const name of HOST_NAMES) {
-      const r = render(text, name, varsFor(name), file, HOST_NAMES);
+      const r = renderFor(text, name, os, file);
       if (!r.ok) {
         errors.push(...r.errors);
         continue;
@@ -275,11 +298,19 @@ async function formatOutputs(out: Outputs) {
 // ---------- build ----------
 
 /** Compile src into an in-memory file map. Throws nothing; returns errors instead. */
-export async function compile(src: string): Promise<{ out: Outputs; errors: string[] }> {
+export async function compile(
+  src: string,
+  os: OsTarget = "any"
+): Promise<{ out: Outputs; errors: string[] }> {
   const out: Outputs = new Map();
   const errs: RenderError[] = [];
-  await buildSkills(src, out, errs);
-  await buildAgents(src, out, errs);
+  await buildSkills(src, os, out, errs);
+  await buildAgents(src, os, out, errs);
+  for (const name of HOST_NAMES) {
+    const host = HOSTS[name];
+    if (!isLocalTree(host)) continue;
+    out.set(`${host.root}/.os`, { data: `${os}\n`, mode: 0o644 });
+  }
   const errors = [...new Set(errs.map(formatError))];
   if (errors.length === 0) await formatOutputs(out);
   return { out, errors };
@@ -290,8 +321,8 @@ export function outputDirs(): string[] {
 }
 
 /** Build src into outDir. Wipes only the generated skills/ and agents/ dirs of each host. */
-export async function build(src: string, outDir: string): Promise<string[]> {
-  const { out, errors } = await compile(src);
+export async function build(src: string, outDir: string, os: OsTarget = "any"): Promise<string[]> {
+  const { out, errors } = await compile(src, os);
   if (errors.length) return errors;
   for (const d of outputDirs()) await rm(join(outDir, d), { recursive: true, force: true });
   for (const d of outputDirs()) await mkdir(join(outDir, d), { recursive: true });
@@ -327,11 +358,17 @@ export async function diffClaudeTree(builtDir: string, committedDir: string): Pr
 }
 
 function parseArgs(argv: string[]) {
-  const opts = { src: "src", out: ".", check: false };
+  const opts = { src: "src", out: ".", check: false, os: "any" as OsTarget };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--check") opts.check = true;
-    else if (a === "--src" || a === "--out") {
+    else if (a === "--os") {
+      const v = argv[++i];
+      if (!v || !isOsTarget(v)) {
+        throw new Error(`--os must be one of ${OS_TARGETS.join(", ")} (got ${v ?? "nothing"})`);
+      }
+      opts.os = v;
+    } else if (a === "--src" || a === "--out") {
       const v = argv[++i];
       if (!v) throw new Error(`${a} needs a value`);
       opts[a === "--src" ? "src" : "out"] = v;
@@ -346,13 +383,15 @@ async function main() {
     opts = parseArgs(process.argv.slice(2));
   } catch (e) {
     console.error(`build: ${(e as Error).message}`);
-    console.error("usage: bun scripts/build/build.ts [--src src] [--out .] [--check]");
+    console.error(
+      `usage: bun scripts/build/build.ts [--src src] [--out .] [--os ${OS_TARGETS.join("|")}] [--check]`
+    );
     process.exit(2);
   }
   if (opts.check) {
     const tmp = await mkdtemp(join(tmpdir(), "omnikit-build-"));
     try {
-      const errors = await build(opts.src, tmp);
+      const errors = await build(opts.src, tmp, opts.os);
       if (errors.length) {
         for (const e of errors) console.error(e);
         process.exit(1);
@@ -369,13 +408,13 @@ async function main() {
     }
     return;
   }
-  const errors = await build(opts.src, opts.out);
+  const errors = await build(opts.src, opts.out, opts.os);
   if (errors.length) {
     for (const e of errors) console.error(e);
     console.error(`build: failed with ${errors.length} error(s); nothing written`);
     process.exit(1);
   }
-  console.error(`build: wrote ${outputDirs().join(", ")} under ${opts.out}`);
+  console.error(`build: wrote ${outputDirs().join(", ")} under ${opts.out} (dist OS: ${opts.os})`);
 }
 
 if (import.meta.main) await main();
