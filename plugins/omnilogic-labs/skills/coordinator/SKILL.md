@@ -69,7 +69,7 @@ dispatch each role on your host, and which model to pick, is in `references/host
    - run `scripts/wt merge <task> --into <prefix><wave>` for each task;
    - dispatch a builder to run the check command there and fix trivial breakage only;
    - fast-forward the base branch to the integration branch: `git merge --ff-only <prefix><wave>`;
-   - mark each task `merged`, then `scripts/wt remove` each worktree.
+   - mark each task `merged`, then `scripts/wt remove` each task and integration worktree. When the work is done, only the base branch remains: no leftover branches or worktrees.
 
    If `wt merge` refuses because two branches touched the same files, have a builder resolve it in the
    integration worktree.
