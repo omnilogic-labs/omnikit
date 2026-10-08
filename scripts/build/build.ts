@@ -7,7 +7,8 @@
 // dist/<host>/.os. The root skills/ tree (what `npx skills` installs) is committed too and renders
 // any-OS: per skill, a dispatcher SKILL.md plus platforms/<host>.md bodies. --check builds into a
 // temp dir and exits 1, listing every path under the committed trees (the Claude plugin and root
-// skills/) whose content or executable bit differs from the fresh build.
+// skills/) whose content or executable bit differs from the fresh build. The coordinator skill also
+// gets each role's rendered agent body (no frontmatter) as roles/<role>.md in every tree.
 
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { platform, tmpdir } from "node:os";
@@ -255,6 +256,27 @@ export function emitAgent(
   return out;
 }
 
+/**
+ * Hosts an agent source targets, read from its raw frontmatter so a Claude-only agent is never
+ * rendered for a host whose vars it does not use. Falls back to every host; emitAgent reports
+ * any frontmatter error after rendering.
+ */
+function targetHosts(text: string): HostName[] {
+  const fm = splitFrontmatter(text);
+  if (!fm) return HOST_NAMES;
+  try {
+    const raw = Bun.YAML.parse(fm.blocks.flatMap((b) => b.lines).join("")) as {
+      hosts?: unknown;
+    } | null;
+    if (Array.isArray(raw?.hosts) && raw.hosts.length) {
+      return HOST_NAMES.filter((h) => (raw.hosts as unknown[]).includes(h));
+    }
+  } catch {
+    // Reported by emitAgent.
+  }
+  return HOST_NAMES;
+}
+
 async function buildAgents(src: string, os: OsTarget, out: Outputs, errors: RenderError[]) {
   const dir = join(src, "agents");
   const files = (await walk(dir)).filter((f) => f.endsWith(".md") && !f.includes("/"));
@@ -262,13 +284,64 @@ async function buildAgents(src: string, os: OsTarget, out: Outputs, errors: Rend
     const file = join(dir, rel);
     const text = await readFile(file, "utf8");
     const role = rel.replace(/\.md$/, "");
-    for (const name of HOST_NAMES) {
+    for (const name of targetHosts(text)) {
       const r = renderFor(text, name, os, file);
       if (!r.ok) {
         errors.push(...r.errors);
         continue;
       }
       for (const [k, v] of emitAgent(role, r.text, file, HOSTS[name], errors)) out.set(k, v);
+    }
+  }
+}
+
+// ---------- role prompts ----------
+
+/** The skill whose output carries the role prompts, as roles/<role>.md, on every host. */
+export const ROLE_SKILL = "coordinator";
+/** Agents whose rendered body (no frontmatter) the role skill carries. */
+export const ROLE_PROMPTS = ["planner", "builder", "verifier"];
+
+/** One role's rendered body for one host and OS target, or null with errors pushed. */
+async function roleBody(
+  src: string,
+  role: string,
+  name: HostName,
+  os: OsTarget,
+  errors: RenderError[]
+): Promise<string | null> {
+  const file = join(src, "agents", `${role}.md`);
+  const text = await readFile(file, "utf8").catch(() => null);
+  if (text === null) {
+    errors.push({
+      file: join(src, "skills", ROLE_SKILL),
+      line: 1,
+      message: `role prompt source ${file} is missing`,
+    });
+    return null;
+  }
+  const r = render(text, { host: name, os, vars: varsFor(name), file, hosts: HOST_NAMES });
+  if (!r.ok) {
+    errors.push(...r.errors);
+    return null;
+  }
+  const fm = splitFrontmatter(r.text);
+  if (!fm) {
+    errors.push({ file, line: 1, message: "agent has no frontmatter" });
+    return null;
+  }
+  return trimLeadingBlank(fm.body).replace(/\s+$/, "") + "\n";
+}
+
+/** Add <root>/skills/<ROLE_SKILL>/roles/<role>.md to each host tree that has the role skill. */
+async function buildRolePrompts(src: string, os: OsTarget, out: Outputs, errors: RenderError[]) {
+  for (const name of HOST_NAMES) {
+    const host = HOSTS[name];
+    const skillDir = `${host.root}/skills/${ROLE_SKILL}`;
+    if (!out.has(`${skillDir}/SKILL.md`)) continue;
+    for (const role of ROLE_PROMPTS) {
+      const body = await roleBody(src, role, name, osForHost(host, os), errors);
+      if (body !== null) out.set(`${skillDir}/roles/${role}.md`, { data: body, mode: 0o644 });
     }
   }
 }
@@ -370,6 +443,33 @@ async function buildPortable(src: string, out: Outputs, errors: RenderError[]) {
         }
       }
     }
+    if (skill === ROLE_SKILL) await portableRoles(src, base, fmt, out, errors);
+  }
+}
+
+/** Role prompts in the portable tree: once at roles/<role>.md, or per host when they differ. */
+async function portableRoles(
+  src: string,
+  base: string,
+  fmt: (text: string, path: string) => Promise<string>,
+  out: Outputs,
+  errors: RenderError[]
+) {
+  for (const role of ROLE_PROMPTS) {
+    const rel = `roles/${role}.md`;
+    const bodies: string[] = [];
+    for (const name of HOST_NAMES) {
+      const body = await roleBody(src, role, name, "any", errors);
+      if (body === null) return;
+      bodies.push(await fmt(body, `${base}/${rel}`));
+    }
+    if (bodies.every((b) => b === bodies[0])) {
+      out.set(`${base}/${rel}`, { data: bodies[0], mode: 0o644 });
+    } else {
+      HOST_NAMES.forEach((name, i) => {
+        out.set(`${base}/platforms/${name}/${rel}`, { data: bodies[i], mode: 0o644 });
+      });
+    }
   }
 }
 
@@ -408,6 +508,7 @@ export async function compile(
   const errs: RenderError[] = [];
   await buildSkills(src, os, out, errs);
   await buildAgents(src, os, out, errs);
+  await buildRolePrompts(src, os, out, errs);
   for (const name of HOST_NAMES) {
     const host = HOSTS[name];
     if (!isLocalTree(host)) continue;

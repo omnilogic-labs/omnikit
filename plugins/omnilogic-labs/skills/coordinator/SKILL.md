@@ -32,9 +32,13 @@ do that in their own contexts and send back short reports.
 
 ## Roles
 
-The role prompts live in the plugin's `agents/` folder: `planner.md`, `builder.md`, and `verifier.md`. How to
-dispatch each role on your host is in `references/hosts.md`. `deep` and `fast` are tiers, not model names;
-`references/models.md` maps them to each host's models. Read both once at the start.
+The role prompts are in this skill's folder: `roles/planner.md`, `roles/builder.md`, and `roles/verifier.md`.
+
+On Claude Code the same prompts are the plugin's agents: dispatch them by name (`omnilogic-labs:<role>`) with the
+Agent tool. Deep is `opus` and fast is `sonnet`.
+
+How to dispatch each role is in `references/hosts.md`; `references/models.md` maps each tier to every host's
+models. Read hosts.md once at the start.
 
 | Role     | Tier                                      | Writes                                        |
 | -------- | ----------------------------------------- | --------------------------------------------- |
@@ -54,7 +58,8 @@ dispatch each role on your host is in `references/hosts.md`. `deep` and `fast` a
 ## The loop
 
 1. **Plan.** If there is no plan, dispatch a planner with the goal. It writes the plan to a file and replies
-   with the file path, the task list, and the waves. Record each task as `planned` in the ledger.
+   with the file path, the task list, and the waves. Record each task as `planned` in the ledger. Commit the
+   plan file and LEDGER.md to the base branch, and commit them again whenever they change.
 2. **Build.** For each task in the current wave whose dependencies are `merged`, up to max lanes at once:
    - create a worktree with `scripts/wt create <task>` (`scripts/` is relative to this SKILL.md's directory, not the repo root), which prints its path;
    - pick the tier the plan gives: fast for rote work, deep for anything complicated;
@@ -91,6 +96,15 @@ Mark the affected task `blocked`, write the reason in the ledger, and keep runni
 depend on it. When nothing runnable is left, report to the owner in five lines or fewer: what merged, what is
 blocked and why, and the exact decision or credential you need.
 
+## Finishing
+
+When every task is `merged` and the milestone review passes:
+
+1. Report to the owner: what merged, and anything left for them.
+2. `git rm` the plan files, including side files such as `plan/*-facts.md`.
+3. Reset LEDGER.md to the empty template from `references/ledger-template.md`.
+4. Commit on the base branch, so only the base branch, an empty ledger and no plans remain.
+
 ## Reading worker replies
 
 - Ask workers for replies of ten lines or fewer, with file paths instead of pasted output.
@@ -111,7 +125,8 @@ The defaults are `../<repo>-worktrees/<name>` on `wave/<name>`; `.agents/coordin
 
 ## References
 
-- `references/hosts.md`: how to dispatch each role, by host.
+- `references/hosts.md`: how to dispatch each role on this host.
+- `roles/`: the planner, builder and verifier prompts.
 - `references/models.md`: which model each tier means on each host.
 - `references/ledger-template.md`: the starting LEDGER.md.
 - `references/config.md`: the `.agents/coordinator.md` settings.

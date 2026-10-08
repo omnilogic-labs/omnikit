@@ -11,7 +11,7 @@ tools: mcp__omnilogic-labs__external_worker, Read
 hosts: [claude]
 ---
 
-Start exactly one job with the `mcp__omnilogic-labs__external_worker` tool, once.
+Start exactly one job with the `{{tool.external}}` tool, once.
 
 - Pass `engine` and `task` as given. Pass `cwd` (the worktree path) when you are given one. Pass `model`, `effort`
   and `timeoutSec` only if given.
