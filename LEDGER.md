@@ -7,7 +7,7 @@ report, merge and block, so a fresh context can resume from this file alone.
 
 **Plan:** plan/compile-step.md (untracked in main checkout; pass absolute path)
 
-**Current wave:** 4 (wave 3 integrated on wave/wave3, not on main; waves 3+4 land together)
+**Current wave:** 5 (waves 1-4 merged to main; real install.sh run; verify 17/17)
 
 ## Tasks
 
@@ -21,7 +21,7 @@ States: planned, building, verifying, fixing (round n), passed, merged, blocked.
 | os-axis         | compiler                  | planned                                                                      |                     | opus; wave 2; owns scripts/build/os.ts + render changes                                                                                                                                                     |
 | portable-tree   | migrate-sources           | planned                                                                      |                     | opus; wave 3                                                                                                                                                                                                |
 | install-verify  | portable-tree, host-facts | passed (crit 6 + Claude verify lines deferred to main after real install.sh) | wave/install-verify | opus; built 44b2e26                                                                                                                                                                                         |
-| host-prose      | portable-tree             | fixing (round 1, plan scope)                                                 | wave/host-prose     | opus; built 26be7bb; 11/12 pass; crit 10 dash scope being amended; follow-up: agy can invoke installed agents by name                                                                                       |
+| host-prose      | portable-tree             | merged                                                                       | -                   |                                                                                                                                                                                                             |
 | docs            | wave 4                    | planned                                                                      |                     | sonnet; wave 5; after wave 4 lands, run bash install.sh on main                                                                                                                                             |
 
 Notes hold the model used, the verify result in one line (for example `PASS 3/3` or `FAIL 2: criterion 4`), the
@@ -32,7 +32,7 @@ merge commit, and anything the next wave needs.
 One line per live worker: role, task, model, and the id or name the host gave it. Remove the line when the worker
 reports. Check this list before dispatching, so no task gets two workers.
 
-- builder, host-prose fix round 1, opus
+- builder, docs, sonnet
 - planner, amend plan for portable root skills/, opus
 
 ## Waves
