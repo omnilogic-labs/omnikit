@@ -1,0 +1,60 @@
+#!/bin/bash
+# render-api: thin curl wrapper for the Render REST API (https://api.render.com/v1).
+# Reads RENDER_API_KEY from the environment. This script does not know where the
+# key came from (env, a secret manager, etc.).
+set -e
+
+usage() {
+  cat >&2 << 'EOF'
+Usage: render-api <METHOD> <path> [curl args...]
+
+  METHOD   GET, POST, PATCH, DELETE, ...
+  path     API path, with or without a leading slash and with or without /v1.
+           "services", "/services", and "/v1/services" are equivalent.
+
+Examples:
+  render-api GET /services
+  render-api GET "/services?limit=20&type=web_service"
+  render-api GET /services/srv-xxxx/deploys
+  render-api POST /services/srv-xxxx/deploys
+  render-api POST /services -d @service.json
+
+Auth: export RENDER_API_KEY (Render dashboard, Account Settings, API Keys).
+Output is pretty-printed with jq when available.
+EOF
+  exit 2
+}
+
+METHOD="${1:-}"
+RPATH="${2:-}"
+{ [ -n "$METHOD" ] && [ -n "$RPATH" ]; } || usage
+shift 2
+
+if [ -z "${RENDER_API_KEY:-}" ]; then
+  echo "render-api: RENDER_API_KEY is not set. Export it (from your env or secret manager) and retry." >&2
+  exit 1
+fi
+
+# Normalize the path: drop a leading slash and an optional leading v1/.
+RPATH="${RPATH#/}"
+RPATH="${RPATH#v1/}"
+URL="https://api.render.com/v1/$RPATH"
+
+set +e
+resp="$(curl -sS --fail-with-body -X "$METHOD" "$URL" \
+  -H "Authorization: Bearer $RENDER_API_KEY" \
+  -H "Accept: application/json" \
+  "$@")"
+status=$?
+set -e
+
+if command -v jq > /dev/null 2>&1 && [ -n "$resp" ]; then
+  printf '%s' "$resp" | jq . 2> /dev/null || printf '%s\n' "$resp"
+else
+  printf '%s\n' "$resp"
+fi
+
+if [ "$status" -ne 0 ]; then
+  echo "render-api: request failed (curl exit $status). Check the method, path, and that RENDER_API_KEY is valid." >&2
+fi
+exit "$status"

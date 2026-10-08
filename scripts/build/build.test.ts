@@ -1,8 +1,8 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { build, compile, diffClaudeTree, emitAgent } from "./build";
+import { build, compile, diffCommittedTrees, emitAgent } from "./build";
 import { HOSTS, HOST_NAMES, varsFor } from "./hosts";
 import { OS_NAMES, OS_TARGETS, type OsTarget } from "./os";
 import { filterFrontmatter, render, tomlString, type RenderError } from "./render";
@@ -429,7 +429,7 @@ describe("build and check", () => {
     expect(listed).toContain("plugins/omnilogic-labs/agents/planner.md");
     expect(listed).toContain("plugins/omnilogic-labs/skills/demo/extra.md");
     expect(listed).toContain("plugins/omnilogic-labs/skills/demo/references/plain.md");
-    expect(await diffClaudeTree(out, out)).toEqual([]);
+    expect(await diffCommittedTrees(out, out)).toEqual([]);
   });
 
   test("a rebuild wipes only the generated dirs", async () => {
@@ -443,5 +443,73 @@ describe("build and check", () => {
     expect(
       await stat(join(out, "plugins/omnilogic-labs/skills/gone")).catch(() => null)
     ).toBeNull();
+  });
+});
+
+describe("portable root skills/", () => {
+  const get = async () => {
+    const { out, errors } = await compile(join(FIX, "src"), "linux");
+    expect(errors).toEqual([]);
+    return (p: string) => {
+      const f = out.get(p);
+      return f === undefined ? undefined : typeof f.data === "string" ? f.data : f.data;
+    };
+  };
+
+  test("dispatcher shape", async () => {
+    const g = await get();
+    const text = g("skills/demo/SKILL.md") as string;
+    const [, fm, body] = text.split(/^---\n/m);
+    expect(fm.match(/^[a-z-]+(?=:)/gm)).toEqual(["name", "description"]);
+    expect(body.trimEnd().split("\n").length).toBeLessThanOrEqual(15);
+    for (const h of HOST_NAMES) expect(body).toContain(`\`platforms/${h}.md\``);
+    expect(body).toContain("Any other agent: `platforms/codex.md`");
+    expect(body).toContain("ignore the other platform files");
+    expect(body).toContain("When `platforms/<host>/<path>` exists");
+    const claude = g("plugins/omnilogic-labs/skills/demo/SKILL.md") as string;
+    expect(g("skills/demo/platforms/claude.md")).toBe(
+      claude.split(/^---\n/m)[2].replace(/^\n+/, "")
+    );
+    expect(g("skills/demo/platforms/codex.md")).toContain("Dispatch with `spawn_agent`.");
+    expect(g("skills/demo/platforms/agy.md")).toContain("Dispatch with `invoke_subagent`.");
+  });
+
+  test("a reference with a host block lands under platforms/<host>/", async () => {
+    const g = await get();
+    expect(g("skills/demo/references/hosts.md")).toBeUndefined();
+    expect(g("skills/demo/platforms/claude/references/hosts.md")).toContain("`Agent`");
+    expect(g("skills/demo/platforms/codex/references/hosts.md")).toContain("`spawn_agent`");
+    expect(g("skills/demo/platforms/agy/references/hosts.md")).toContain("`invoke_subagent`");
+  });
+
+  test("a reference without one lands once, rendered any-OS", async () => {
+    const g = await get();
+    expect(g("skills/demo/references/plain.md")).toBeDefined();
+    expect(g("skills/demo/references/models.md")).toContain("gpt-6.1-sol");
+    expect(g("skills/demo/references/os.md")).toContain("On Windows (Git Bash):");
+    for (const h of HOST_NAMES) {
+      expect(g(`skills/demo/platforms/${h}/references/plain.md`)).toBeUndefined();
+      expect(g(`skills/demo/platforms/${h}/references/os.md`)).toBeUndefined();
+    }
+    expect(g("skills/demo/scripts/run.sh")).toBeDefined();
+  });
+
+  test("an exec-bit mismatch fails --check", async () => {
+    const out = await tmp();
+    expect(await build(join(FIX, "src"), out)).toEqual([]);
+    const check = () =>
+      Bun.spawnSync(["bun", BUILD, "--src", join(FIX, "src"), "--out", out, "--check"]);
+    expect(check().exitCode).toBe(0);
+    for (const p of [
+      "skills/demo/scripts/run.sh",
+      "plugins/omnilogic-labs/skills/demo/scripts/run.sh",
+    ]) {
+      await chmod(join(out, p), 0o644);
+      const res = check();
+      expect(res.exitCode).toBe(1);
+      expect(res.stdout.toString()).toContain(`${p} (executable bit missing`);
+      await chmod(join(out, p), 0o755);
+    }
+    expect(check().exitCode).toBe(0);
   });
 });
