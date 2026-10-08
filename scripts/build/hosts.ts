@@ -10,6 +10,8 @@ export interface Host {
   label: string;
   /** Model a subagent file or Agent call names, per tier. */
   tier: Record<Tier, string>;
+  /** Models an agent file may name on this host. Unset means any name. */
+  allowedModels?: string[];
   /** Reasoning effort per tier, where the host has one. */
   effort?: Record<Tier, string>;
   /** Model the host's CLI (and the external_worker tool) takes, per tier. */
@@ -62,6 +64,7 @@ export const HOSTS: Record<HostName, Host> = {
     name: "agy",
     label: "Antigravity (agy)",
     tier: { deep: "pro", fast: "flash" },
+    allowedModels: ["pro", "flash", "inherit"],
     cli: { deep: "gemini-3.1-pro-high", fast: "gemini-3.8-flash-medium" },
     tool: { agent: "invoke_subagent" },
     root: "dist/agy",
