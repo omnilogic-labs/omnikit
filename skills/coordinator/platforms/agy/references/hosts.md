@@ -16,11 +16,17 @@ ten lines or fewer.
 
 ## Antigravity (agy)
 
-- Read `roles/<role>.md` and use its body as the role prompt.
-- Dispatch with `invoke_subagent`. Pick each worker's model by tier: `pro` for deep, `flash` for
-  fast.
-- Use the workspace mode that inherits the current directory, and point the worker at its worktree path. Do not
-  use a mode that makes its own branch.
+- The installer adds the roles as agy agents named `planner`, `builder` and `verifier` (in
+  `~/.gemini/config/agents`); `agy agents` lists what is installed. Dispatch one with `invoke_subagent`: one entry in
+  `Subagents` with `TypeName: "<role>"`, a short `Role` title, and the task as the `Prompt`. Entries in one call run
+  in parallel; each reports back when done, and `send_message` reaches a running one.
+- Pick each worker's model by tier with the entry's `Model`: `pro` for deep, `flash` for fast.
+  It takes only `inherit`, `flash_lite`, `flash` or `pro`.
+- If the role is not an installed agent (`invoke_subagent` answers "not found"), read `roles/<role>.md` and pass its
+  body as the start of the `Prompt` instead, with `TypeName` set to an agent that is installed, or define one first
+  with `define_subagent`.
+- Leave `Workspace` at `inherit` (the current directory) and point the worker at its worktree path. Do not use
+  `branch` or `share`, which make their own workspace.
 
 ## No subagents
 
