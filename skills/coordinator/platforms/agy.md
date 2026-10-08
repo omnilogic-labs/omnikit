@@ -24,8 +24,8 @@ do that in their own contexts and send back short reports.
 
 The role prompts are in this skill's folder: `roles/planner.md`, `roles/builder.md`, and `roles/verifier.md`.
 
-On Antigravity, dispatch with `invoke_subagent` and pass the role file's body as the prompt. Deep is `pro`
-and fast is `flash`.
+On Antigravity, dispatch the installed agent by name with `invoke_subagent` (`TypeName`), or paste the role file's
+body. Deep is `pro` and fast is `flash`.
 
 How to dispatch each role is in `references/hosts.md`; `references/models.md` maps each tier to every host's
 models. Read hosts.md once at the start.
