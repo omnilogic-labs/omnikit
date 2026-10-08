@@ -33,7 +33,7 @@ One line per live worker: role, task, model, and the id or name the host gave it
 reports. Check this list before dispatching, so no task gets two workers.
 
 - builder, install-verify, opus
-- planner, add Finishing rules + portable fixes to host-prose, opus
+- builder, host-prose, opus
 - planner, amend plan for portable root skills/, opus
 
 ## Waves

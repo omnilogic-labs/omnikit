@@ -223,31 +223,62 @@ src/skills/plain-writing/SKILL.md` it exits 1 and prints a `stale-build` line (r
 
 ### host-prose
 
-- **Goal:** Replace the hand-written per-host prose in the coordinator skill and agents with templated blocks so
-  each host reads only its own instructions.
-- **Files:** `src/skills/coordinator/`, `src/agents/`, and the regenerated `plugins/omnilogic-labs/skills/coordinator/`,
-  `plugins/omnilogic-labs/agents/` and `skills/coordinator/`.
-- **Steps:** In `SKILL.md` Roles, and in `references/hosts.md`, wrap the Claude Code, Codex and agy sections in
-  `@if` blocks and write model names as `{{tier.deep}}`/`{{tier.fast}}` and tool names as `{{tool.*}}`; use
-  `{{agents.dir}}` for the role-file path. Codex section: if host-facts (c) is yes, dispatch the installed custom
-  agent by name; otherwise keep "read the body and paste it". Keep the "No subagents" and "External workers"
-  sections (the latter Claude-only). Keep `references/models.md` as the cross-host table. Agents: use `{{tool.*}}`
-  where a body names a host tool. Keep every generated SKILL.md within budget.
+- **Goal:** Replace the hand-written per-host prose in the coordinator skill and agents with templated blocks, make
+  the role prompts findable from every tree, add the commit-and-clean-up lifecycle for plans and the ledger, and
+  remove the em dashes from artistic-vision's extract.ts.
+- **Files:** `src/skills/coordinator/`, `src/agents/`, `src/skills/artistic-vision/scripts/extract.ts`,
+  `scripts/build/build.ts` and `scripts/build/build.test.ts` (role-prompt emit only), and the regenerated
+  `plugins/omnilogic-labs/skills/{coordinator,artistic-vision}/`, `plugins/omnilogic-labs/agents/` and
+  `skills/{coordinator,artistic-vision}/`.
+- **Steps:**
+  - Host prose: in `SKILL.md` Roles, and in `references/hosts.md`, wrap the Claude Code, Codex and agy sections in
+    `@if` blocks and write model names as `{{tier.deep}}`/`{{tier.fast}}` and tool names as `{{tool.*}}`. Codex
+    section: if host-facts (c) is yes, dispatch the installed custom agent by name; otherwise keep "read the body
+    and paste it". Keep the "No subagents" and "External workers" sections (the latter Claude-only). Keep
+    `references/models.md` as the cross-host table. Agents: use `{{tool.*}}` where a body names a host tool.
+  - Role prompts (finding a): `{{agents.dir}}` (`../../agents`) does not exist from the portable root `skills/`
+    tree. Have the build emit each coordinator role's rendered body (planner, builder, verifier; no frontmatter)
+    into the coordinator skill output as `roles/<role>.md`, per host, in every tree (plugin, dist, and portable,
+    where host-specific copies follow the `platforms/<host>/` rule). Point SKILL.md and hosts.md at
+    `roles/<role>.md` relative to the skill folder; drop "the plugin's agents/ folder" wording and
+    `{{agents.dir}}` if nothing else uses it. Claude Code keeps dispatching plugin agents by name.
+  - Plan and ledger lifecycle (owner decision): in The loop, once the planner writes the plan, commit the plan
+    file and LEDGER.md to the base branch, and commit them again whenever they change. Add a short Finishing
+    section: when every task is `merged` and the milestone review passes, report to the owner, `git rm` the plan
+    files (including side files such as `plan/*-facts.md`), reset LEDGER.md to the empty template from
+    `references/ledger-template.md`, and commit, so only the base branch, an empty ledger and no plans remain.
+  - extract.ts (finding b): replace the em dashes in `src/skills/artistic-vision/scripts/extract.ts` with plain
+    punctuation, without changing behaviour.
+  - Keep every generated SKILL.md and platform file within budget (SKILL.md body at most 150 lines).
 - **Tier:** deep
 - **Depends on:** migrate-sources, portable-tree
 - **Acceptance criteria:**
   1. `bun run build && bun run build:check` exits 0.
-     1a. `ls skills/coordinator/platforms/codex/references/hosts.md skills/coordinator/platforms/agy/references/hosts.md
-skills/coordinator/platforms/claude/references/hosts.md` succeeds and `test ! -e
-skills/coordinator/references/hosts.md` succeeds (hosts.md now differs per host).
-  2. `grep -c 'spawn_agent\|invoke_subagent' plugins/omnilogic-labs/skills/coordinator/references/hosts.md` is 0;
+  2. `ls skills/coordinator/platforms/codex/references/hosts.md skills/coordinator/platforms/agy/references/hosts.md
+skills/coordinator/platforms/claude/references/hosts.md` succeeds and
+     `test ! -e skills/coordinator/references/hosts.md` succeeds (hosts.md now differs per host).
+  3. `grep -c 'spawn_agent\|invoke_subagent' plugins/omnilogic-labs/skills/coordinator/references/hosts.md` is 0;
      `grep -c 'subagent_type\|external_worker' dist/codex/skills/coordinator/references/hosts.md
 dist/agy/skills/coordinator/references/hosts.md` is 0 for both.
-  3. `grep -l 'gpt-6.1-sol' dist/codex/skills/coordinator/references/hosts.md` matches, and the same file in the
+  4. `grep -l 'gpt-6.1-sol' dist/codex/skills/coordinator/references/hosts.md` matches, and the same file in the
      Claude and agy trees does not contain `gpt-6`.
-  4. `grep -rn '@if\|@endif\|{{' plugins/omnilogic-labs dist skills --include=*.md` prints nothing.
-  5. `bash scripts/skill-stats.sh --strict` exits 0.
-  6. `bun run check && bun run verify` passes.
+  5. `grep -rn '@if\|@endif\|{{' plugins/omnilogic-labs dist skills --include=*.md` prints nothing.
+  6. Role prompts: for each tree root T in `plugins/omnilogic-labs/skills/coordinator`,
+     `dist/codex/skills/coordinator`, `dist/agy/skills/coordinator`, `skills/coordinator`, every `roles/<role>.md`
+     path named in that tree's SKILL.md or platform files and hosts.md exists, under T or (portable tree) under
+     `T/platforms/<host>/`; `ls` each of planner, builder, verifier there succeeds and none starts with `---`.
+  7. `grep -rn "plugin's .agents/. folder\|\.\./\.\./agents" plugins/omnilogic-labs/skills/coordinator
+dist/*/skills/coordinator skills/coordinator` prints nothing.
+  8. `bun test scripts/build` passes and includes a test that the coordinator skill output contains
+     `roles/planner.md`, `roles/builder.md` and `roles/verifier.md` with the rendered body of each agent.
+  9. Lifecycle: `grep -n '^## Finishing' src/skills/coordinator/SKILL.md` matches; that section names `git rm` of
+     the plan files including side files, resetting LEDGER.md from `references/ledger-template.md`, and a commit.
+     The loop's plan step says to commit the plan and LEDGER.md to the base branch and to commit them as they
+     change (inspect the text).
+  10. `grep -rnP '[\x{2013}\x{2014}]' src skills plugins/omnilogic-labs/skills` prints nothing.
+  11. `bash scripts/skill-stats.sh --strict` exits 0, and `awk 'f>=2; /^---$/{f++}'
+plugins/omnilogic-labs/skills/coordinator/SKILL.md | wc -l` is 150 or less.
+  12. `bun run check && bun run verify` passes.
 
 ### portable-tree
 
