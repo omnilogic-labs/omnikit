@@ -4,8 +4,11 @@ Cross-platform agent skills by Omnilogic Labs, for Claude Code, Codex, and Antig
 
 ## Layout
 
-- `plugins/omnilogic-labs/` is the one plugin: `skills/`, `agents/`, `bin/`, `evals/`
-- `skills/` holds generated symlinks into the plugin for Codex and agy; never hand-edit
+- `src/skills/` and `src/agents/` are the source. Edit there, never the generated output: `plugins/omnilogic-labs/{skills,agents}`, root `skills/`, and `dist/`
+- `scripts/build/` is the compiler; `hosts.ts` is the one table of per-host models and tools, `os.ts` the OS table
+- `bun run build` regenerates every tree; run it after any `src/` or `scripts/build/` change. `bun run build:check` and `bun run verify` fail on stale output
+- `plugins/omnilogic-labs/` is the one plugin: generated `skills/` and `agents/`, plus `bin/`, `evals/`
+- `skills/` is the committed portable copy for `npx skills` (a dispatcher plus `platforms/<host>.md`); `dist/` is gitignored, built per machine
 - `.claude-plugin/marketplace.json` is the marketplace manifest
 - `install.sh` is the single install path; `scripts/skill-stats.sh` checks budgets
 
@@ -34,6 +37,7 @@ Cross-platform agent skills by Omnilogic Labs, for Claude Code, Codex, and Antig
 - A script that finds files relative to itself resolves its path with `realpath "$0"` first: Codex and agy reach it through a symlink, and Git Bash's `cd -P` resolves only the last component.
 - Paths handed to `$.fs` in hooks are resolved by the engine, so `/tmp/x` is `<current drive>:\tmp\x` on Windows while bash sees `%TEMP%\x`. Share one path between them by having bash print it (`pwd -W` in Git Bash).
 - Version bumps update both marketplace.json and plugin.json.
-- Use `bun`, never npm or pnpm. After adding or renaming a skill, run `bash install.sh`.
+- Use `bun`, never npm or pnpm. After adding or renaming a skill, run `bun run build` and `bash install.sh`.
+- Name no model outside `hosts.ts`; templates use `{{tier.deep}}` and similar.
 - After changing skills, agents, or install.sh, run `bun run verify` (`bun run verify:ask` also asks each tool's model).
 - Coordinate multi-step work with the coordinator skill; finished work lands on main with no leftover branches or worktrees.
