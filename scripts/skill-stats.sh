@@ -29,7 +29,7 @@ fi
 
 frontmatter() { awk '/^---$/{f++; next} f==1' "$1"; }
 body() { awk 'f>=2; /^---$/{f++}' "$1"; }
-count_dashes() { grep -o '[—–]' "$1" | wc -l | tr -d ' '; }
+count_dashes() { grep -o -e "$(printf '\342\200\224')" -e "$(printf '\342\200\223')" "$1" | wc -l | tr -d ' '; }
 
 # The codex and agy trees are machine-local. Use dist/ when it is there,
 # otherwise build into a temp dir so the stats never depend on an install.
