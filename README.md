@@ -77,7 +77,7 @@ What each tool should see:
 - Codex: the 7 skills, as linked from `dist/codex`, and 4 agents (no `external-runner`, which is Claude only). Ask with `codex exec -s read-only "list your skills" </dev/null`.
 - Antigravity: the 7 skills, unprefixed, and the same 4 agents. Ask with `agy -p "list your skills" --mode plan --sandbox </dev/null`.
 
-`bun run build` on its own writes `dist/` for OS `any`. Run `bash install.sh` (which builds for the detected OS) before `bun run verify`, or `install-check` reports `wrong-os`.
+`bun run build` on its own writes `dist/` for `OMNIKIT_OS` if set, else the OS already recorded in `dist/*/.os`, else the detected OS, so `install-check` does not report `wrong-os` after it. `--os` overrides all three (`--os any` keeps every OS block). The committed trees (the Claude plugin and root `skills/`) are always any-OS.
 
 Troubleshooting:
 
