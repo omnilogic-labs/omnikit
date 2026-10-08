@@ -3,4 +3,4 @@ type: llm
 weight: 1
 ---
 
-The reply uses bin/art convert with a .webp output path and then bin/art info to confirm. It uses no Gemini subcommand and does no preflight key or install check.
+The reply lists bin/art convert with a .webp output path followed by bin/art info to confirm. It lists no Gemini subcommand, and no key check or dependency install appears as a command step (a passing remark that bun must be available is fine).
