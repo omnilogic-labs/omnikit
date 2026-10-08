@@ -9,5 +9,6 @@
   },
   "homepage": "https://github.com/omnilogic-labs/omnikit",
   "repository": "https://github.com/omnilogic-labs/omnikit",
-  "license": "MIT"
+  "license": "MIT",
+  "types": "./types/index.d.ts"
 }

@@ -1,0 +1,110 @@
+import { expect, mock, test } from "claude-code/testing";
+import type { On } from "claude-code";
+
+import type { WorkerJob } from "../types";
+
+const SESSION = "sess-1234";
+const TOOL = "mcp__omnilogic-labs__external_worker";
+
+// The world beneath the plugin: an in-memory filesystem with one real
+// directory, a session id, and a Bash tool that records the call.
+function world(on: On, options: { denyBash?: boolean } = {}) {
+  const files = new Map<string, string>();
+  const bash: string[] = [];
+  const toasts: string[] = [];
+  on("session.id", async () => ({ value: SESSION }));
+  on("session.root", async () => ({ value: "/repo" }));
+  on("process.run", async () => ({
+    value: {
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+      isStdoutTruncated: false,
+      isStderrTruncated: false,
+    },
+  }));
+  on("fs.write", async (_$, e) => {
+    files.set(e.path, e.text);
+    return { value: undefined };
+  });
+  on("fs.read", async (_$, e) => {
+    const text = files.get(e.path);
+    if (text === undefined) return { deny: `ENOENT ${e.path}` };
+    return { value: text };
+  });
+  on("fs.stat", async (_$, e) => {
+    if (e.path !== "/repo") return { deny: `ENOENT ${e.path}` };
+    return { value: { kind: "dir" as const, size: 0, mtimeMs: 0, isLink: false } };
+  });
+  on("ui.toast", async (_$, e) => {
+    toasts.push(e.text);
+    return { value: undefined };
+  });
+  on("tool.call", { tool: "Bash" }, async (_$, e) => {
+    if (options.denyBash === true) return { deny: "not allowed" };
+    bash.push(String((e as unknown as { command: string }).command));
+    return { result: { backgroundTaskId: "bg-1" } };
+  });
+  // The plugin's state as it writes it ($.state is the kit's, beneath the test).
+  const state: { jobs: WorkerJob[] } = { jobs: [] };
+  on("state.set", { plugin: "omnilogic-labs", key: "jobs" }, async (_$, e, next) => {
+    state.jobs = e.value as WorkerJob[];
+    return next(e);
+  });
+  return { files, bash, toasts, state };
+}
+
+test("a fake job moves from running to done when exit appears", async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000 });
+  const w = world(on);
+
+  const started = await $.tool.call({ tool: TOOL, task: "SENTINEL-42", engine: "fake" });
+  expect(started.deny).toBeUndefined();
+  expect(String(started.result)).toContain("bg-1");
+
+  const [job] = w.state.jobs;
+  expect(job?.status).toBe("running");
+  expect(job?.taskId).toBe("bg-1");
+  expect(job?.dir).toBe(`/tmp/omnilogic-labs/workers/${SESSION}/${job?.id}`);
+  expect(w.files.get(`${job?.dir}/task.txt`)).toBe("SENTINEL-42");
+  expect(w.files.get(`${job?.dir}/params`)).toBe("fake\n/repo\n1800\n\n\n");
+  expect(w.bash).toHaveLength(1);
+  expect(w.bash[0]).toContain("/hooks/run-worker.sh'");
+
+  // Still running while the stream grows and no exit file exists.
+  w.files.set(`${job?.dir}/stream.jsonl`, '{"n":1}\n{"n":2}\n');
+  await clock.advance(1_000);
+  const [mid] = w.state.jobs;
+  expect(mid?.status).toBe("running");
+  expect(mid?.lines).toBe(2);
+
+  w.files.set(`${job?.dir}/last.txt`, "fake worker finished: SENTINEL-42\n");
+  w.files.set(`${job?.dir}/exit`, "0\n");
+  await clock.advance(1_000);
+  const [done] = w.state.jobs;
+  expect(done?.status).toBe("done");
+  expect(done?.exitCode).toBe(0);
+  expect(w.toasts).toEqual([`fake job ${job?.id} finished (exit 0)`]);
+});
+
+test("a missing cwd fails the job with a non-zero exit and no Bash call", async ($, on) => {
+  mock.clock(on, { now: 1_000 });
+  const w = world(on);
+
+  await $.tool.call({ tool: TOOL, task: "x", engine: "fake", cwd: "/nope" });
+  const [job] = w.state.jobs;
+  expect(job?.status).toBe("failed");
+  expect(job?.exitCode).toBe(2);
+  expect(w.files.get(`${job?.dir}/exit`)).toBe("2\n");
+  expect(w.bash).toHaveLength(0);
+});
+
+test("a denied Bash call marks the job failed", async ($, on) => {
+  mock.clock(on, { now: 1_000 });
+  const w = world(on, { denyBash: true });
+
+  const ran = await $.tool.call({ tool: TOOL, task: "x", engine: "fake" });
+  expect(ran.deny ?? ran.text).toContain("not allowed");
+  const [job] = w.state.jobs;
+  expect(job?.status).toBe("failed");
+});
