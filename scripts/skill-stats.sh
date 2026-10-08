@@ -11,8 +11,8 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGIN="$REPO/plugins/omnilogic-labs"
 SYNTAX='subagent_type|SendMessage|TodoWrite|AskUserQuestion|mcp__|the (Agent|Task|Skill|Bash|Read|Write|Edit) tool'
 PORTABLE=" name description license compatibility metadata allowed-tools "
-MAX_DESC=500
-MAX_BODY=500
+MAX_DESC=300
+MAX_BODY=150
 
 STRICT=0
 ONLY=""
