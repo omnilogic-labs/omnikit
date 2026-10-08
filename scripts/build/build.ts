@@ -215,7 +215,21 @@ export function emitAgent(
   const fmText = fm.blocks.flatMap((b) => b.lines).join("");
   const meta = parseAgentMeta(fmText, file, rendered, errors);
   if (!meta || !meta.hosts.includes(host.name)) return out;
-  const model = meta.models[host.name] ?? host.tier[meta.tier];
+  const override = meta.models[host.name];
+  const model = override ?? host.tier[meta.tier];
+  if (host.allowedModels && !host.allowedModels.includes(model)) {
+    const where = override !== undefined ? "models" : "tier";
+    const fix =
+      override !== undefined
+        ? `fix models.${host.name} in this agent`
+        : `fix the ${host.name} tier in scripts/build/hosts.ts`;
+    errors.push({
+      file,
+      line: lineOfKey(rendered, where),
+      message: `${host.name} model "${model}" (from ${where}:) is not allowed; use one of ${host.allowedModels.join(", ")}; ${fix}`,
+    });
+    return out;
+  }
   const body = trimLeadingBlank(fm.body).replace(/\s+$/, "") + "\n";
   const base = `${host.root}/agents/${role}`;
   const mode = 0o644;
