@@ -1,7 +1,7 @@
 {
   "name": "omnilogic-labs",
   "displayName": "Omnilogic Labs",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Omnilogic Labs skills and agents for coordinated builds, browsing, images, secrets, hosting, and writing.",
   "author": {
     "name": "Omnilogic Labs",

@@ -2,10 +2,13 @@
 
 One plugin carrying every Omnilogic Labs skill and agent.
 
+`skills/` and `agents/` here are generated from `src/` by `bun run build`. Do not edit them; edit `src/` and rebuild.
+
 ## Skills
 
 - `agent-browser`: drive Vercel Labs' agent-browser CLI (snapshot-ref workflow, sessions, gotchas).
 - `artistic-vision`: Gemini-powered image intelligence plus Sharp-powered local image processing.
+- `coordinator`: run multi-step work through planner, builder, and verifier agents.
 - `onepassword`: reliable secret retrieval from 1Password through the `op` CLI.
 - `plain-writing`: how to write prose a reader understands on the first pass.
 - `primer`: turn a vague product idea into a build brief, task files, and a build run.
@@ -13,7 +16,7 @@ One plugin carrying every Omnilogic Labs skill and agent.
 
 ## Agents and binaries
 
-- `agents/browser-buddy.md`: a browser operator agent. Give it a high-level task and it returns a concise findings report.
+- `agents/`: `planner`, `builder`, `verifier`, `external-runner`, and `browser-buddy`, a browser operator that returns a concise findings report.
 - `bin/agent-browser`: bash shim that resolves the vendored `agent-browser` binary and guards one footgun (below). Claude Code puts `bin/` on `PATH` while the plugin is enabled.
 
 ## Dependencies

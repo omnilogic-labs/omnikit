@@ -14,7 +14,7 @@ One plugin, `omnilogic-labs`, carries every skill and agent. In Claude Code they
 - `primer`: turn a product idea into a build brief and task files
 - `render`: Render.com blueprints, SSH, and REST API
 
-Agents: `planner`, `builder`, `verifier`, and `browser-buddy` (Claude Code only).
+Agents: `planner`, `builder`, `verifier`, `browser-buddy`, and `external-runner`.
 
 ## Install
 
@@ -27,13 +27,13 @@ bash install.sh --dry-run   # print what would change, change nothing
 bash install.sh
 ```
 
-| Tool            | How it installs                                                         |
-| --------------- | ----------------------------------------------------------------------- |
-| Claude Code     | `omnilogic-labs@omnikit` plugin from this clone's `omnikit` marketplace |
-| Codex CLI       | one symlink per skill in `~/.agents/skills`, live on edit               |
-| Antigravity CLI | one symlink per skill in `~/.gemini/config/skills`, live on edit        |
+| Tool            | How it installs                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------- |
+| Claude Code     | `omnilogic-labs@omnikit` plugin from this clone's `omnikit` marketplace                             |
+| Codex CLI       | skill links in `~/.agents/skills`, agent links in `~/.codex/agents`, into `dist/codex`              |
+| Antigravity CLI | skill links in `~/.gemini/config/skills`, agent links in `~/.gemini/config/agents`, into `dist/agy` |
 
-The installer picks every tool it finds on PATH and says which ones it skipped. Other flags: `--claude`, `--codex`, `--agy` (one tool only), `--browser` (also set up agent-browser and Chrome), `--force`, `--check`, `--help`. Re-run after a `git pull` that adds or renames a skill, and restart open Claude Code, Codex, and agy sessions so they rescan.
+The installer runs `bun run build` first, then links. It picks every tool it finds on PATH and says which ones it skipped. Other flags: `--claude`, `--codex`, `--agy` (one tool only), `--browser` (also set up agent-browser and Chrome), `--force`, `--check`, `--help`. `OMNIKIT_OS=linux|wsl|macos|windows` overrides the detected OS. Re-run after a `git pull` or any `src/` edit, and restart open Claude Code, Codex, and agy sessions so they rescan.
 
 Run the installer from the main checkout, not a worktree: Claude Code's marketplace points at whichever clone ran it.
 
@@ -46,7 +46,7 @@ Run `bash install.sh` from **Git Bash**. It works there with these prerequisites
 
 What the installer handles for you on Windows:
 
-- Git for Windows clones with `core.symlinks=false`, so the links in `skills/` arrive as small text files. The installer sets `core.symlinks=true` for the clone and checks them out again as real links. `git status` stays clean.
+- Git for Windows clones with `core.symlinks=false`. The committed trees hold no links, so the clone is unaffected; the installer sets `core.symlinks=true` anyway and `git status` stays clean.
 - The Claude Code marketplace is added by its Windows path (`D:\...\omnikit`). An `omnikit` marketplace that points at GitHub or another clone is removed and added again from this clone.
 
 What the agents need to know, and the skills now say it where the scripts are called:
@@ -67,7 +67,7 @@ bun run verify:ask   # the same, plus one model query each to claude, codex, and
 Success is exit 0 and a last stdout line of `summary pass=14 fail=0 skip=0` (`pass=17` with `--ask`; a tool not on PATH counts as `skip`). Each check prints one `pass`, `fail`, or `skip` line. What each tool should see:
 
 - Claude Code: 7 skills and 5 agents, all named `omnilogic-labs:<name>`, no unprefixed copies, and the `mcp__omnilogic-labs__external_worker` tool. The script reads the `system/init` event of `claude -p --output-format stream-json --verbose`, which lists `skills`, `agents`, `plugins`, and `tools`.
-- Codex: the 7 skills, shown as `omnilogic-labs:<name>` because the links resolve into the plugin. Ask with `codex exec -s read-only "list your skills" </dev/null`.
+- Codex: the 7 skills, as linked from `dist/codex`. Ask with `codex exec -s read-only "list your skills" </dev/null`.
 - Antigravity: the 7 skills, unprefixed. Ask with `agy -p "list your skills" --mode plan --sandbox </dev/null`.
 
 Troubleshooting:
@@ -87,6 +87,31 @@ This repo is a [Bun](https://bun.com) workspace. To get started:
 bun install
 ```
 
+### The build
+
+Skills and agents are written once under `src/` and compiled for each host. Edit `src/` and `scripts/build/hosts.ts` (models, efforts, tool names) or `scripts/build/os.ts` (OS values). Never edit the generated trees: `plugins/omnilogic-labs/{skills,agents}`, root `skills/`, and `dist/`.
+
+```bash
+bun run build         # regenerate every tree
+bun run build:check   # exit 1 and list generated files that differ from a fresh build
+bun test              # run the compiler tests (bun run test)
+```
+
+What it writes:
+
+- `plugins/omnilogic-labs/`: the Claude Code plugin, committed, rendered for every OS.
+- `skills/`: the portable copy `npx skills` installs, committed. Each skill is a short dispatcher `SKILL.md` plus `platforms/<host>.md` bodies, so one install serves Claude Code, Codex, and agy.
+- `dist/codex` and `dist/agy`: gitignored, rendered for this machine's OS (recorded in `dist/<host>/.os`). Codex agents are TOML; agy agents are Markdown.
+
+Template syntax, in any `src/` Markdown file:
+
+- `{{tier.deep}}`, `{{cli.fast}}`, `{{tool.agent}}`, `{{host.label}}`, `{{os.shell}}`: values for the host being rendered. `{{codex.tier.deep}}` reads another host's value. An unknown name fails the build.
+- `<!-- @if codex -->` ... `<!-- @endif -->` keeps the lines between only for that host. `<!-- @if claude,agy -->` is OR. A host list and an OS list may be combined with a space: `<!-- @if codex windows -->`. Blocks do not nest.
+- OS names are `linux`, `wsl`, `macos`, `windows`. In the committed any-OS trees an OS block is kept under a label line such as `On Windows (Git Bash):`; in `dist/` only the matching OS stays.
+- Agent frontmatter may carry `tier: deep|fast`; the build turns it into each host's model.
+
+`bun run verify` also runs the build check, so a stale tree fails it. Commit regenerated trees with the `src/` change that caused them.
+
 Each plugin under `plugins/*` is a workspace member. The root package is private and not published to npm; distribution happens via the Git repo itself (see Install above).
 
 ## Repository Structure
@@ -95,8 +120,11 @@ Each plugin under `plugins/*` is a workspace member. The root package is private
 omnikit/
   AGENTS.md                         # Layout, skills, conventions (CLAUDE.md imports it)
   .claude-plugin/marketplace.json   # Claude Code marketplace manifest
-  plugins/omnilogic-labs/           # The plugin: skills/, agents/, bin/, evals/
-  skills/                           # Generated symlinks for Codex and agy
+  src/                              # Source of every skill and agent: edit here
+  scripts/build/                    # Compiler, hosts.ts and os.ts tables, tests
+  plugins/omnilogic-labs/           # The plugin: generated skills/ and agents/, plus bin/, evals/
+  skills/                           # Generated portable copy for npx skills
+  dist/                             # Generated Codex and agy trees (gitignored)
   install.sh                        # Installs into Claude Code, Codex, and agy
   scripts/verify-install.sh         # Checks what each tool registered
   scripts/skill-stats.sh            # Token and size budget check
@@ -104,9 +132,9 @@ omnikit/
 
 ## Contributing
 
-Follow the conventions in AGENTS.md, run `bun run check` and `bun run budget`, and open a PR.
+Follow the conventions in AGENTS.md, run `bun run build`, `bun run check`, and `bun run budget`, and open a PR.
 
-To add a skill, create `plugins/omnilogic-labs/skills/<name>/SKILL.md` with YAML frontmatter, then run `bash install.sh`.
+To add a skill, create `src/skills/<name>/SKILL.md` with YAML frontmatter, then run `bun run build` and `bash install.sh`.
 
 ## License
 
