@@ -200,10 +200,10 @@ for (const a of arms) {
   for (const r of rs) {
     out.push(`**\`${r.trial}\`**\n`);
     for (const f of r.provable_fabrications)
-      out.push(`- access log contradicts: ${f.url} — ${f.why}`);
+      out.push(`- access log contradicts: ${f.url}: ${f.why}`);
     for (const f of r.facts_fabricated)
       out.push(`- wrong value for \`${f.id}\`: reported ${f.reported.join(", ")}`);
-    for (const f of r.judge?.fabrications || []) out.push(`- judged: ${f.claim} — ${f.why}`);
+    for (const f of r.judge?.fabrications || []) out.push(`- judged: ${f.claim}: ${f.why}`);
     out.push("");
   }
 }

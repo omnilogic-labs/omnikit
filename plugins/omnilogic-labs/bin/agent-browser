@@ -15,7 +15,7 @@
 # The guard below rejects flag-shaped arguments the CLI's own help does not
 # document, so a mistyped flag becomes a loud error instead of a stray file.
 # It derives the valid set from `--help` at runtime, so it needs no maintenance
-# as the CLI changes, and it fails OPEN on anything it cannot determine — a
+# as the CLI changes, and it fails OPEN on anything it cannot determine: a
 # guard that blocks real work is worse than the litter it prevents.
 #
 # Escape hatch: AGENT_BROWSER_SKIP_FLAG_CHECK=1
@@ -72,7 +72,7 @@ _help_flags() {
     help="$("$AB" --help 2> /dev/null || true)"
   fi
   [ -n "$help" ] || return 1
-  # Short flags come only from option *definition* lines — those that begin with
+  # Short flags come only from option *definition* lines, those that begin with
   # a dash after indentation. Scraping single-letter tokens out of the whole help
   # text would whitelist any `-x` merely mentioned in prose or an example, which
   # is how `-s` (a snapshot flag) first slipped past this guard on `screenshot`.
@@ -87,14 +87,14 @@ _help_flags() {
   # top-level help documents SUBCOMMAND options next to global ones. `-s,
   # --selector <sel>` sits under `Snapshot Options:`; `-p`, `-v`, `-q` sit under
   # a plain `Options:`. Since the guard allows root ∪ subcommand flags, every
-  # snapshot short flag was allowed on every subcommand — so `screenshot -s foo`
+  # snapshot short flag was allowed on every subcommand, so `screenshot -s foo`
   # passed, and the CLI swallowed `-s` as the selector positional and wrote a file
   # named `-s`. That is the litter this guard exists to prevent, and it produced
   # two of the observed filenames above.
   #
   # So at the root, keep long flags from any definition line (a wrong long flag is
   # still caught by not being documented anywhere), but take SHORT flags only from
-  # the generic `Options:` block — the ones that really are global. A subcommand's
+  # the generic `Options:` block, the ones that really are global. A subcommand's
   # own short flags still reach it through its own help: `snapshot --help` declares
   # `-s`, so `snapshot -s main` is unaffected.
   if [ -z "$sub" ]; then
@@ -110,8 +110,8 @@ _help_flags() {
       | sort -u)"
     # Drop every short flag, then add back only the global ones. If the `Options:`
     # block could not be found, root_short is empty and all short flags fall away
-    # — strictly safe: a real global short flag then errors loudly instead of
-    # silently becoming a filename, and the message names the valid set.
+    # (strictly safe: a real global short flag then errors loudly instead of
+    # silently becoming a filename, and the message names the valid set.)
     flags="$(printf '%s\n%s\n' "$(printf '%s\n' "$flags" | grep -vE '^-[A-Za-z]$')" "$root_short" \
       | sed '/^$/d' | sort -u)"
   fi
@@ -148,7 +148,7 @@ _subcommands() {
   # Subcommand names come from two places in the top-level help, because it does
   # not list them all the same way.
   #
-  #   1. Indented bare words — the ordinary command list.
+  #   1. Indented bare words, the ordinary command list.
   #   2. The word right after `agent-browser` in any usage or example line. Some
   #      commands appear ONLY this way: `find` is introduced as
   #      "Find Elements:  agent-browser find <locator> <value> <action>", so it
@@ -223,7 +223,7 @@ _flag_guard() {
     echo
     echo "Refusing to run. This CLI takes bare positionals on several subcommands"
     echo "(e.g. 'screenshot [selector] [path]'), so an unrecognized flag would be"
-    echo "silently accepted as a positional — writing a file named '${bad[0]}' into"
+    echo "silently accepted as a positional, writing a file named '${bad[0]}' into"
     echo "$PWD and reporting success."
     echo
     echo "Valid flags for '$sub':"

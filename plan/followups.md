@@ -55,7 +55,7 @@ last merge (see Waves).
 - **Steps:**
   - `plugins/omnilogic-labs/bin/agent-browser` (hand-written, not generated): 7 lines, 6 comments and one `echo`
     message (line 226). Rewrite each with a colon, comma, parentheses or a new sentence.
-  - `bench/browser-buddy/grade/report.mjs` lines 203 and 206: output strings; use `: ` or `, ` in place of `—`.
+  - `bench/browser-buddy/grade/report.mjs` lines 203 and 206: output strings; use `: ` or `, `.
   - `scripts/skill-stats.sh` line 32 `count_dashes` greps for the literal dash characters. Keep the behaviour but
     drop the literals, for example `grep -o -e "$(printf '\342\200\224')" -e "$(printf '\342\200\223')"` (portable
     to macOS grep, no `-P`). Confirm it still counts by running it on `src/skills/plain-writing/references/rewrites.md`
