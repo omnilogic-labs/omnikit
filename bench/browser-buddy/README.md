@@ -30,7 +30,7 @@ defect found.
 ## The arms
 
 Defined in `arms.json`. All three run the **byte-identical** prompt, extracted at run time from
-`../agents/browser-buddy.md`, and differ only in two CLI flags.
+`../../plugins/omnilogic-labs/agents/browser-buddy.md`, and differ only in two CLI flags.
 
 | Arm          | Flags                                                                        |
 | ------------ | ---------------------------------------------------------------------------- |

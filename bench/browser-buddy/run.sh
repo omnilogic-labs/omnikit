@@ -14,8 +14,8 @@ set -e
 #   ./run.sh --reps 5 --jobs 3 --out ~/.cache/browser-buddy-eval
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN="$(cd "$HERE/.." && pwd)"
-AGENT_FILE="$PLUGIN/agents/browser-buddy.md"
+REPO="$(cd "$HERE/../.." && pwd)"
+AGENT_FILE="$REPO/plugins/omnilogic-labs/agents/browser-buddy.md"
 
 REPS=1
 JOBS=3

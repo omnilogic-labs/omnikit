@@ -1,0 +1,7 @@
+{
+  "name": "agent-browser-skill",
+  "private": true,
+  "dependencies": {
+    "agent-browser": "^0.33.1"
+  }
+}

@@ -1,5 +1,6 @@
 #!/bin/bash
-# agent-browser: exec the workspace-vendored binary. Lives at the plugin root
+# agent-browser: exec the vendored binary (skills/agent-browser/node_modules, or
+# a hoisted workspace root). Lives at the plugin root
 # so Claude Code puts it on PATH while the plugin is enabled, and so a
 # ~/.local/bin symlink survives bun re-creating node_modules.
 #
@@ -28,9 +29,9 @@ while [ -L "$SOURCE" ]; do
 done
 HERE="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 
-AB="$HERE/../node_modules/.bin/agent-browser"
+AB="$HERE/../skills/agent-browser/node_modules/.bin/agent-browser"
 if [ ! -x "$AB" ]; then
-  # Hoisted layout fallback: walk up looking for node_modules/.bin/agent-browser.
+  # Hoisted layout fallback (workspace root): walk up looking for node_modules/.bin/agent-browser.
   DIR="$HERE"
   while [ "$DIR" != "/" ]; do
     if [ -x "$DIR/node_modules/.bin/agent-browser" ]; then

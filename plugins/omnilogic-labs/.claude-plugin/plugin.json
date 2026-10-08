@@ -1,0 +1,13 @@
+{
+  "name": "omnilogic-labs",
+  "displayName": "Omnilogic Labs",
+  "version": "2.0.0",
+  "description": "Omnilogic Labs agent skills: browser automation, image generation and editing, 1Password secrets, Render hosting, plain writing, and primer build briefs.",
+  "author": {
+    "name": "Omnilogic Labs",
+    "url": "https://github.com/omnilogic-labs"
+  },
+  "homepage": "https://github.com/omnilogic-labs/omnikit",
+  "repository": "https://github.com/omnilogic-labs/omnikit",
+  "license": "MIT"
+}

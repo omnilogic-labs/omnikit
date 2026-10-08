@@ -32,7 +32,7 @@ Bun is the only external system dependency. The `agent-browser` binary is a work
 ./setup-browser-buddy.sh
 ```
 
-That runs `bun install`, downloads Chrome, symlinks `agent-browser` into `~/.local/bin`, and runs a smoke test. In Claude Code the plugin's `bin/` directory is already on `PATH` when the plugin is enabled. If the command is missing, run the setup script, or call the shim directly at `plugins/browser-buddy/bin/agent-browser`. On Linux, if the browser fails to launch for missing system libraries, run `agent-browser install --with-deps` once.
+That runs `bun install`, downloads Chrome, symlinks `agent-browser` into `~/.local/bin`, and runs a smoke test. In Claude Code the plugin's `bin/` directory is already on `PATH` when the plugin is enabled. If the command is missing, run the setup script, or call the shim directly at `plugins/omnilogic-labs/bin/agent-browser`. On Linux, if the browser fails to launch for missing system libraries, run `agent-browser install --with-deps` once.
 
 When anything about the install looks wrong (`Unknown command`, `Failed to connect`, a stale daemon, a version mismatch, missing Chrome), run `agent-browser doctor` before you start guessing. `doctor --offline --quick` is the fast local-only check; `doctor --fix` performs destructive repairs; `doctor --json` is machine-readable. It cleans up stale socket, pid, and version sidecar files on every run.
 
