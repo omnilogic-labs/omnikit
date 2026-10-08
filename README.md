@@ -64,11 +64,20 @@ bun run verify       # install.sh --check, Claude Code plugin state and init eve
 bun run verify:ask   # the same, plus one model query each to claude, codex, and agy
 ```
 
-Success is exit 0 and a last stdout line of `summary pass=14 fail=0 skip=0` (`pass=17` with `--ask`; a tool not on PATH counts as `skip`). Each check prints one `pass`, `fail`, or `skip` line. What each tool should see:
+Success is exit 0 and a last stdout line of `summary pass=<n> fail=0 skip=0`. Each check prints one `pass`, `fail`, or `skip` line, and a tool not on PATH counts as `skip`. The checks run in groups:
 
-- Claude Code: 7 skills and 5 agents, all named `omnilogic-labs:<name>`, no unprefixed copies, and the `mcp__omnilogic-labs__external_worker` tool. The script reads the `system/init` event of `claude -p --output-format stream-json --verbose`, which lists `skills`, `agents`, `plugins`, and `tools`.
-- Codex: the 7 skills, as linked from `dist/codex`. Ask with `codex exec -s read-only "list your skills" </dev/null`.
-- Antigravity: the 7 skills, unprefixed. Ask with `agy -p "list your skills" --mode plan --sandbox </dev/null`.
+- Build: `build-fresh` runs `bun run build:check`, so generated trees that differ from `src/` fail.
+- Install: `install-check` runs `install.sh --check` and fails on missing, stale, legacy, or nested links and on a `dist/` built for another OS.
+- Claude Code: the marketplace points at the main checkout, the plugin is enabled with no stale copies, and the `system/init` event of `claude -p --output-format stream-json --verbose` lists every skill and agent as `omnilogic-labs:<name>`, with no unprefixed copies and the `mcp__omnilogic-labs__external_worker` tool.
+- Codex and agy: every skill is linked, no skill folder holds a nested `SKILL.md`, no legacy links remain, and every agent is linked. With `--ask`, one model query per tool must name every skill.
+
+What each tool should see:
+
+- Claude Code: all 7 skills and 5 agents (`planner`, `builder`, `verifier`, `browser-buddy`, `external-runner`).
+- Codex: the 7 skills, as linked from `dist/codex`, and 4 agents (no `external-runner`, which is Claude only). Ask with `codex exec -s read-only "list your skills" </dev/null`.
+- Antigravity: the 7 skills, unprefixed, and the same 4 agents. Ask with `agy -p "list your skills" --mode plan --sandbox </dev/null`.
+
+`bun run build` on its own writes `dist/` for OS `any`. Run `bash install.sh` (which builds for the detected OS) before `bun run verify`, or `install-check` reports `wrong-os`.
 
 Troubleshooting:
 
