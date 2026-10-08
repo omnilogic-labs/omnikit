@@ -3,19 +3,30 @@
 //   bun scripts/build/build.ts [--src src] [--out .] [--os linux|wsl|macos|windows|any] [--check]
 //
 // Committed trees (the Claude plugin) always render any-OS: every OS block is kept under its label
-// line. The machine-local trees (dist/<host>) render for --os (default any), and record it in
-// dist/<host>/.os. The root skills/ tree (what `npx skills` installs) is committed too and renders
+// line. The machine-local trees (dist/<host>) render for one OS and record it in dist/<host>/.os.
+// Without --os that OS is OMNIKIT_OS, else the concrete OS already recorded in dist/<host>/.os,
+// else the detected OS (as install.sh detects it); --os overrides all three, and --os any keeps
+// every OS block. The root skills/ tree (what `npx skills` installs) is committed too and renders
 // any-OS: per skill, a dispatcher SKILL.md plus platforms/<host>.md bodies. --check builds into a
 // temp dir and exits 1, listing every path under the committed trees (the Claude plugin and root
 // skills/) whose content or executable bit differs from the fresh build. The coordinator skill also
 // gets each role's rendered agent body (no frontmatter) as roles/<role>.md in every tree.
 
+import { readFileSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { platform, tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
 import * as prettier from "prettier";
 import { HOSTS, HOST_NAMES, type Host, type HostName, type Tier, varsFor } from "./hosts";
-import { OS_TARGETS, type OsTarget, isOsTarget } from "./os";
+import {
+  OS_TARGETS,
+  type OsName,
+  type OsSource,
+  type OsTarget,
+  defaultOs,
+  detectOs,
+  isOsTarget,
+} from "./os";
 import {
   filterFrontmatter,
   formatError,
@@ -614,8 +625,33 @@ export async function diffCommittedTrees(
   return diffs;
 }
 
+/**
+ * The dist OS for a build into outDir when --os is not given: OMNIKIT_OS, then the OS recorded
+ * in each local tree's .os when they agree, then detection. Inputs are injectable for tests.
+ */
+export async function resolveDefaultOs(
+  outDir: string,
+  env: string | undefined = process.env.OMNIKIT_OS,
+  detect: () => OsName = () => detectOs(process.platform, readFileSyncOrNull("/proc/version"))
+): Promise<{ os: OsTarget; source: OsSource }> {
+  const recorded = await Promise.all(
+    HOST_NAMES.filter((h) => isLocalTree(HOSTS[h])).map((h) =>
+      readFile(join(outDir, HOSTS[h].root, ".os"), "utf8").catch(() => null)
+    )
+  );
+  return defaultOs(env, recorded, detect);
+}
+
+function readFileSyncOrNull(path: string): string | null {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return null;
+  }
+}
+
 function parseArgs(argv: string[]) {
-  const opts = { src: "src", out: ".", check: false, os: "any" as OsTarget };
+  const opts = { src: "src", out: ".", check: false, os: null as OsTarget | null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--check") opts.check = true;
@@ -648,7 +684,7 @@ async function main() {
   if (opts.check) {
     const tmp = await mkdtemp(join(tmpdir(), "omnikit-build-"));
     try {
-      const errors = await build(opts.src, tmp, opts.os);
+      const errors = await build(opts.src, tmp, opts.os ?? "any");
       if (errors.length) {
         for (const e of errors) console.error(e);
         process.exit(1);
@@ -665,13 +701,25 @@ async function main() {
     }
     return;
   }
-  const errors = await build(opts.src, opts.out, opts.os);
+  let os: OsTarget;
+  let source: OsSource;
+  try {
+    ({ os, source } = opts.os
+      ? { os: opts.os, source: "--os" as const }
+      : await resolveDefaultOs(opts.out));
+  } catch (e) {
+    console.error(`build: ${(e as Error).message}`);
+    process.exit(2);
+  }
+  const errors = await build(opts.src, opts.out, os);
   if (errors.length) {
     for (const e of errors) console.error(e);
     console.error(`build: failed with ${errors.length} error(s); nothing written`);
     process.exit(1);
   }
-  console.error(`build: wrote ${outputDirs().join(", ")} under ${opts.out} (dist OS: ${opts.os})`);
+  console.error(
+    `build: wrote ${outputDirs().join(", ")} under ${opts.out} (dist OS: ${os} (${source}))`
+  );
 }
 
 if (import.meta.main) await main();

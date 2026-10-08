@@ -1,10 +1,18 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { build, compile, diffCommittedTrees, emitAgent, ROLE_PROMPTS, ROLE_SKILL } from "./build";
+import {
+  build,
+  compile,
+  diffCommittedTrees,
+  emitAgent,
+  resolveDefaultOs,
+  ROLE_PROMPTS,
+  ROLE_SKILL,
+} from "./build";
 import { HOSTS, HOST_NAMES, varsFor } from "./hosts";
-import { OS_NAMES, OS_TARGETS, type OsTarget } from "./os";
+import { detectOs, OS_NAMES, OS_TARGETS, type OsTarget } from "./os";
 import { filterFrontmatter, render, tomlString, type RenderError } from "./render";
 
 const FIX = join(import.meta.dir, "fixtures");
@@ -281,6 +289,132 @@ describe("--os", () => {
     ]);
     expect(p.exitCode).not.toBe(0);
     expect(p.stderr.toString()).toContain("linux, wsl, macos, windows, any");
+  });
+
+  test("detection mirrors install.sh detect_os", () => {
+    const wslProc = "Linux version 6.6.0-microsoft-standard-WSL2 (gcc)";
+    const table: [string, string | null, string][] = [
+      ["darwin", null, "macos"],
+      ["Darwin", null, "macos"],
+      ["win32", null, "windows"],
+      ["MINGW64_NT-10.0", null, "windows"],
+      ["MSYS_NT-10.0", null, "windows"],
+      ["CYGWIN_NT-10.0", null, "windows"],
+      ["linux", wslProc, "wsl"],
+      ["linux", "Linux version 6.6.0-MICROSOFT-standard", "wsl"],
+      ["linux", "Linux version 6.8.0-45-generic (buildd@ubuntu)", "linux"],
+      ["linux", null, "linux"],
+      ["freebsd", null, "linux"],
+    ];
+    for (const [platform, proc, want] of table) expect(detectOs(platform, proc)).toBe(want);
+  });
+
+  const recordOs = async (out: string, os: string | null) => {
+    for (const h of ["codex", "agy"]) {
+      await mkdir(join(out, "dist", h), { recursive: true });
+      if (os !== null) await writeFile(join(out, "dist", h, ".os"), `${os}\n`);
+    }
+  };
+  const detectWsl = () => "wsl" as const;
+
+  test("the default reuses a concrete OS recorded in dist/*/.os", async () => {
+    const out = await tmp();
+    await recordOs(out, "windows");
+    expect(await resolveDefaultOs(out, undefined, detectWsl)).toEqual({
+      os: "windows",
+      source: "recorded in dist/*/.os",
+    });
+  });
+
+  test("a recorded any, a missing .os, or a disagreement falls through to detection", async () => {
+    for (const os of ["any", null]) {
+      const out = await tmp();
+      await recordOs(out, os);
+      expect(await resolveDefaultOs(out, undefined, detectWsl)).toEqual({
+        os: "wsl",
+        source: "detected",
+      });
+    }
+    const out = await tmp();
+    await recordOs(out, "macos");
+    await writeFile(join(out, "dist/agy/.os"), "linux\n");
+    expect((await resolveDefaultOs(out, undefined, detectWsl)).source).toBe("detected");
+    expect((await resolveDefaultOs(await tmp(), undefined, detectWsl)).os).toBe("wsl");
+  });
+
+  test("OMNIKIT_OS wins over .os, and a bad value is refused", async () => {
+    const out = await tmp();
+    await recordOs(out, "windows");
+    expect(await resolveDefaultOs(out, "macos", detectWsl)).toEqual({
+      os: "macos",
+      source: "OMNIKIT_OS",
+    });
+    for (const bad of ["any", "beos"]) {
+      await expect(resolveDefaultOs(out, bad, detectWsl)).rejects.toThrow(
+        "linux, wsl, macos, windows"
+      );
+    }
+  });
+
+  const cli = (out: string, args: string[], env: Record<string, string | undefined> = {}) => {
+    const e = { ...process.env, ...env };
+    for (const k of Object.keys(e)) if (e[k] === undefined) delete e[k];
+    return Bun.spawnSync(["bun", BUILD, "--src", join(FIX, "src"), "--out", out, ...args], {
+      env: e as Record<string, string>,
+    });
+  };
+  const distOs = (out: string, h: string) => readFile(join(out, "dist", h, ".os"), "utf8");
+  const claudeAnyOs = async (out: string) => {
+    const claude = await readFile(join(out, "plugins/omnilogic-labs", fixtureOs), "utf8");
+    expect(claude).toContain("On Windows (Git Bash):");
+    const portable = await readFile(join(out, fixtureOs), "utf8");
+    expect(portable).toContain("On Windows (Git Bash):");
+    expect(await stat(join(out, "plugins/omnilogic-labs/.os")).catch(() => null)).toBeNull();
+    expect(await stat(join(out, "skills/.os")).catch(() => null)).toBeNull();
+  };
+
+  test("CLI: recorded .os, OMNIKIT_OS and explicit --os in order; committed trees any-OS", async () => {
+    const out = await tmp();
+    await recordOs(out, "windows");
+    let p = cli(out, [], { OMNIKIT_OS: undefined });
+    expect(p.exitCode).toBe(0);
+    expect(p.stderr.toString()).toContain("dist OS: windows (recorded in dist/*/.os)");
+    for (const h of ["codex", "agy"]) expect(await distOs(out, h)).toBe("windows\n");
+    await claudeAnyOs(out);
+
+    p = cli(out, [], { OMNIKIT_OS: "macos" });
+    expect(p.exitCode).toBe(0);
+    expect(p.stderr.toString()).toContain("dist OS: macos (OMNIKIT_OS)");
+    expect(await distOs(out, "agy")).toBe("macos\n");
+    await claudeAnyOs(out);
+
+    p = cli(out, ["--os", "linux"], { OMNIKIT_OS: "macos" });
+    expect(p.exitCode).toBe(0);
+    expect(p.stderr.toString()).toContain("dist OS: linux (--os)");
+    expect(await distOs(out, "codex")).toBe("linux\n");
+    await claudeAnyOs(out);
+
+    p = cli(out, ["--os", "any"], { OMNIKIT_OS: undefined });
+    expect(p.exitCode).toBe(0);
+    expect(await distOs(out, "agy")).toBe("any\n");
+    await claudeAnyOs(out);
+  });
+
+  test("CLI: with no .os and no OMNIKIT_OS, the detected OS is written", async () => {
+    const out = await tmp();
+    const p = cli(out, [], { OMNIKIT_OS: undefined });
+    expect(p.exitCode).toBe(0);
+    const proc = await readFile("/proc/version", "utf8").catch(() => null);
+    const want = detectOs(process.platform, proc);
+    expect(p.stderr.toString()).toContain(`dist OS: ${want} (detected)`);
+    expect(await distOs(out, "codex")).toBe(`${want}\n`);
+    await claudeAnyOs(out);
+  });
+
+  test("CLI: a bad OMNIKIT_OS exits 2 naming the allowed values", async () => {
+    const p = cli(await tmp(), [], { OMNIKIT_OS: "beos" });
+    expect(p.exitCode).toBe(2);
+    expect(p.stderr.toString()).toContain("OMNIKIT_OS must be linux, wsl, macos, windows");
   });
 
   test("--check compares only the committed tree, whatever --os is", async () => {
