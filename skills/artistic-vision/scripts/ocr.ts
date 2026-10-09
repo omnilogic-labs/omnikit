@@ -6,7 +6,7 @@
  */
 
 import { Command } from "commander";
-import { IMAGEN_MODEL, generateStructuredContent, type Part } from "./google";
+import { VISION_MODEL, generateStructuredContent, type Part } from "./google";
 import { log } from "./log";
 import { loadImageAsBase64 } from "./util";
 
@@ -58,7 +58,7 @@ export function registerOCR(program: Command): void {
     .action(async (image: string, opts: { model?: string; plain?: boolean; json?: boolean }) => {
       if (opts.json || opts.plain) log.toStderr();
 
-      const model = opts.model ?? IMAGEN_MODEL;
+      const model = opts.model ?? VISION_MODEL;
       log.dim(`Using ${model}`);
 
       const { base64, mimeType } = loadImageAsBase64(image);

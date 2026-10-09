@@ -10,7 +10,7 @@
 
 ## Gemini options
 
-- `--model <model>`: override the default Gemini model
+- `--model <model>`: override the model on the commands that only read images (`describe`, `compare`, `ocr`, `detect`, `analyze`, `diff`, `sheet analyze`). `generate`, `edit` and `extract` always use Nano Banana 2.1.
 - `--json`: structured JSON output (log messages go to stderr)
 
 ## generate and edit options
@@ -19,8 +19,8 @@
 - `--attempts <n>`: generate n times and keep the best (requires `--judge`)
 - `--judge <criteria>`: judging criteria for multi-attempt mode
 - `--ref <path>`: reference image, repeatable
-- `--aspect <ratio>`: `1:1` `2:3` `3:2` `3:4` `4:3` `4:5` `5:4` `9:16` `16:9` `21:9`
-- `--size <size>`: `512`, `1K`, `2K`, `4K` (default `1K`, uppercase `K`). `0.5K` is documented but rejected by the API; use `512`.
+- `--aspect <ratio>`: `1:1` `1:4` `1:8` `4:1` `8:1` `2:3` `3:2` `3:4` `4:3` `4:5` `5:4` `9:16` `16:9` `21:9`
+- `--size <size>`: `1K`, `2K`, `4K` (default `1K`, uppercase `K`). Nano Banana 2.1 rejects `512`.
 
 `--aspect` and `--size` are the only way to control output dimensions, and both exit on a typo rather than falling back to a 1K square. Use `2K` or `4K` when the image has small type.
 

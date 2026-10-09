@@ -60,9 +60,8 @@ Every option, flag and example is in [references/commands.md](references/command
 
 ## Choosing a model
 
-- Default is `gemini-3.1-flash-image-preview` (Flash): fast, near-Pro quality, used for all image operations.
-- `gemini-3-pro-image-preview` (Pro): highest fidelity. Use it when the user asks for high quality, and for any image with real typography. Pass it with `--model`.
-- Commands that answer in JSON (`--judge`, `ocr`, `detect`, `analyze`, `diff`, `sheet`) run on the text model `gemini-3.8-flash`. An image model passed to them is redirected to it, because image models ignore a response schema and return an image.
+- `generate`, `edit` and `extract` always use Nano Banana 2.1 (`gemini-nano-banana-2.1`). There is no other image model and no `--model` flag on them.
+- Commands that read images and answer in words or JSON (`describe`, `compare`, `--inspect`, `--judge`, `ocr`, `detect`, `analyze`, `diff`, `sheet`) run on the text model `gemini-3.8-flash`. Nano Banana 2.1 often answers a question with a picture, so it is not used for them.
 
 ## Generating and editing
 
@@ -71,7 +70,7 @@ Every option, flag and example is in [references/commands.md](references/command
 - Pass references with repeatable `--ref <path>`. `generate --ref` makes a sibling of the references; `edit` keeps its primary input's layout.
 - Add `--inspect` to `generate`, `edit` or `extract` to verify the result.
 - `--attempts <n> --judge <criteria>` renders n candidates and keeps the best by the text model's score. Treat the score as a hint. If judging fails, the best attempt is still written and a warning is printed.
-- Text inside images is the most common failure. Use Pro and `--size 2K` or `4K`, quote the exact string, and always verify with `bin/art ocr <out> --plain`.
+- Text inside images is the most common failure. Use `--size 2K` or `4K`, quote the exact string, and always verify with `bin/art ocr <out> --plain`.
 - `generate` and `edit` cannot make a transparent background. Use `extract`, or prompt onto solid green and run `key`.
 
 Details: [references/prompting.md](references/prompting.md) for prompts, text, consistency, framing, references and `--judge`; [references/transparency.md](references/transparency.md) for alpha.

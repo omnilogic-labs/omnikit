@@ -20,7 +20,6 @@ import { loadImageAsBase64, writeGeneratedImage } from "./util";
 import { describeImage } from "./describe";
 
 interface EditOpts {
-  model?: string;
   inspect?: string | true;
   attempts?: string;
   judge?: string;
@@ -82,20 +81,19 @@ export function registerEdit(program: Command): void {
     .argument("<input>", "Source image file path")
     .argument("<output>", "Output file path")
     .argument("<instruction...>", "Editing instruction")
-    .option("--model <model>", "Gemini model override")
     .option(
       "--ref <path>",
       "Additional reference image, sent alongside the input (repeatable)",
       (value: string, previous: string[]) => previous.concat(value),
       [] as string[]
     )
-    .option("--aspect <ratio>", "Aspect ratio (e.g. 1:1, 16:9, 3:2, 5:4)")
-    .option("--size <size>", "Image size: 512, 1K, 2K, 4K (default 1K)")
+    .option("--aspect <ratio>", "Aspect ratio (e.g. 1:1, 16:9, 4:1, 1:8)")
+    .option("--size <size>", "Image size: 1K, 2K, 4K (default 1K)")
     .option("--inspect [question]", "Auto-describe the result after editing")
     .option("--attempts <n>", "Edit N times and keep the best")
     .option("--judge <criteria>", "AI judging criteria (requires --attempts)")
     .action(async (input: string, output: string, instructionParts: string[], opts: EditOpts) => {
-      const model = opts.model ?? IMAGEN_MODEL;
+      const model = IMAGEN_MODEL;
       const instruction = instructionParts.join(" ");
       const attempts = opts.attempts ? parseInt(opts.attempts, 10) : 1;
       const refs = opts.ref ?? [];

@@ -26,7 +26,6 @@ export function registerExtract(program: Command): void {
     .argument("<output>", "Output file path (should be .png for transparency)")
     .option("--subject <description>", "What to keep (default: the main subject)")
     .option("--key <color>", "Chroma key color: green or magenta", "green")
-    .option("--model <model>", "Gemini model override")
     .option("--inspect [question]", "Auto-describe the result")
     .action(
       async (
@@ -35,11 +34,10 @@ export function registerExtract(program: Command): void {
         opts: {
           subject?: string;
           key: string;
-          model?: string;
           inspect?: string | true;
         }
       ) => {
-        const model = opts.model ?? IMAGEN_MODEL;
+        const model = IMAGEN_MODEL;
         const subject = opts.subject ?? "the main subject";
         const keyColor = opts.key as KeyColor;
         if (keyColor !== "green" && keyColor !== "magenta") {

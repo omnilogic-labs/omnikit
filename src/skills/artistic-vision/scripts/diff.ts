@@ -7,7 +7,7 @@
 
 import { Command } from "commander";
 import sharp from "sharp";
-import { IMAGEN_MODEL, generateStructuredContent, type Part } from "./google";
+import { VISION_MODEL, generateStructuredContent, type Part } from "./google";
 import { log } from "./log";
 import { loadImageAsBase64 } from "./util";
 
@@ -94,7 +94,7 @@ export function registerDiff(program: Command): void {
     .action(async (image1: string, image2: string, opts: { model?: string; json?: boolean }) => {
       if (opts.json) log.toStderr();
 
-      const model = opts.model ?? IMAGEN_MODEL;
+      const model = opts.model ?? VISION_MODEL;
       log.dim(`Using ${model}`);
 
       // Local pixel diff

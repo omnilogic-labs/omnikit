@@ -26,7 +26,6 @@ Models are tuned for narrative description, not tag lists. `A photorealistic wid
 Small type garbles plausibly: fine at thumbnail size, wrong when read.
 
 - Describe the font by character ("clean bold sans-serif", "elegant serif"), never by name; font names are not honoured.
-- Use `--model gemini-3-pro-image-preview` for real typography.
 - Raise `--size` to `2K` or `4K`. There is no post-hoc fix, since `upscale` and `resize` add no detail.
 - Give the exact string in quotes and constrain lists by count ("exactly eight ingredients, once each"); unconstrained lists sprout duplicates and inventions.
 - Verify with `bin/art ocr <out> --plain` and diff against the spec. Do not trust a glance or `--judge` alone.
@@ -58,10 +57,7 @@ bin/art edit light/flow.png dark/flow.png \
 
 Pass prior images as `--ref` and let the pixels carry the likeness. Do not also describe the subject in prose: words compete with the references and pull toward the generic. Say instead: "It must be the exact same dog: take his likeness directly from the attached images, not from any description. Only his accessories and setting change."
 
-| Model                            | Object refs | Character refs | Style refs |
-| -------------------------------- | ----------- | -------------- | ---------- |
-| `gemini-3-pro-image-preview`     | 6           | 5              | none       |
-| `gemini-3.1-flash-image-preview` | 10          | 4              | 3          |
+Google has not published reference limits for Nano Banana 2.1. Its predecessors took 4 or 5 character references and up to 10 object references, so stay within that.
 
 ## Framing and composition
 

@@ -20,11 +20,11 @@ export function getGoogleAI(): GoogleGenAI {
   return new GoogleGenAI({ apiKey });
 }
 
-/** Gemini 3.1 Flash Image: default for all operations. Fast, near-Pro quality. */
-export const IMAGEN_MODEL = "gemini-3.1-flash-image-preview";
-
-/** Gemini 3 Pro Image: highest fidelity. Use only when user explicitly requests high quality. */
-export const IMAGEN_PRO_MODEL = "gemini-3-pro-image-preview";
+/**
+ * Nano Banana 2.1: the only image model. generate, edit and extract always use
+ * it; there is no Flash/Pro choice.
+ */
+export const IMAGEN_MODEL = "gemini-nano-banana-2.1";
 
 /**
  * Gemini 3.8 Flash, the text model behind anything that has to answer in words
@@ -36,20 +36,26 @@ export const IMAGEN_PRO_MODEL = "gemini-3-pro-image-preview";
  */
 export const VISION_MODEL = "gemini-3.8-flash";
 
-/** Image-only models, which answer with a picture whatever the config asks for. */
+/**
+ * Image-only models, which answer with a picture whatever the config asks for.
+ * Nano Banana 2.1's id has no "-image" in it, so match it by name too.
+ */
 function isImageOnlyModel(model: string): boolean {
-  return model.includes("-image");
+  return model.includes("-image") || model.includes("nano-banana");
 }
 
 /**
  * Aspect ratios accepted by ImageConfig.aspectRatio.
  *
- * Taken from the image-generation guide, not the SDK's ImageConfig typedoc:
- * the typedoc omits 4:5 and 5:4, which the models do accept (Google's own
- * multi-reference example passes "5:4").
+ * Taken from the API's own rejection message for Nano Banana 2.1, not the
+ * SDK's ImageConfig typedoc, which omits several of them.
  */
 export const ASPECT_RATIOS = [
   "1:1",
+  "1:4",
+  "1:8",
+  "4:1",
+  "8:1",
   "2:3",
   "3:2",
   "3:4",
@@ -62,13 +68,10 @@ export const ASPECT_RATIOS = [
 ] as const;
 
 /**
- * Sizes accepted by ImageConfig.imageSize. Uppercase K is required; default 1K.
- *
- * Taken from the API's own rejection message, which is authoritative. The
- * prose docs describe the smallest size as "512px (0.5K)", but "0.5K" is
- * rejected; the literals it accepts are 512, 512P and 512PX.
+ * Sizes Nano Banana 2.1 accepts for ImageConfig.imageSize. Uppercase K is
+ * required; default 1K. The API also lists 512, but this model rejects it.
  */
-export const IMAGE_SIZES = ["512", "512P", "512PX", "1K", "2K", "4K"] as const;
+export const IMAGE_SIZES = ["1K", "2K", "4K"] as const;
 
 export interface ImageShapeOpts {
   aspect?: string;

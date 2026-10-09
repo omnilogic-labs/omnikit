@@ -7,7 +7,7 @@
 
 import { Command } from "commander";
 import sharp from "sharp";
-import { IMAGEN_MODEL, generateStructuredContent, type Part } from "./google";
+import { VISION_MODEL, generateStructuredContent, type Part } from "./google";
 import { log } from "./log";
 import { loadImageAsBase64, writeImageBuffer } from "./util";
 
@@ -134,7 +134,7 @@ export function registerDetect(program: Command): void {
       ) => {
         if (opts.json) log.toStderr();
 
-        const model = opts.model ?? IMAGEN_MODEL;
+        const model = opts.model ?? VISION_MODEL;
         log.dim(`Using ${model}`);
 
         const { base64, mimeType } = loadImageAsBase64(image);

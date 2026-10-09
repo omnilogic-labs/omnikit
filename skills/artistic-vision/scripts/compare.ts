@@ -6,7 +6,7 @@
  */
 
 import { Command } from "commander";
-import { getGoogleAI, IMAGEN_MODEL, type Part } from "./google";
+import { getGoogleAI, VISION_MODEL, type Part } from "./google";
 import { log } from "./log";
 import { loadImageAsBase64 } from "./util";
 
@@ -24,7 +24,7 @@ export function registerCompare(program: Command): void {
     .option("--model <model>", "Gemini model override")
     .action(async (image1: string, image2: string, question: string, opts: { model?: string }) => {
       const ai = getGoogleAI();
-      const model = opts.model ?? IMAGEN_MODEL;
+      const model = opts.model ?? VISION_MODEL;
       const img1 = loadImageAsBase64(image1);
       const img2 = loadImageAsBase64(image2);
 

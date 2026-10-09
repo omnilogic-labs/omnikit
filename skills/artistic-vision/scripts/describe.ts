@@ -5,7 +5,7 @@
  */
 
 import { Command } from "commander";
-import { getGoogleAI, IMAGEN_MODEL, extractTextFromResponse, type Part } from "./google";
+import { getGoogleAI, VISION_MODEL, extractTextFromResponse, type Part } from "./google";
 import { log } from "./log";
 import { loadImageAsBase64 } from "./util";
 
@@ -16,7 +16,7 @@ export async function describeImage(
   model?: string
 ): Promise<string> {
   const ai = getGoogleAI();
-  const m = model ?? IMAGEN_MODEL;
+  const m = model ?? VISION_MODEL;
   const { base64, mimeType } = loadImageAsBase64(imagePath);
 
   const parts: Part[] = [{ inlineData: { data: base64, mimeType } }, { text: question }];
@@ -41,7 +41,7 @@ export function registerDescribe(program: Command): void {
     .argument("[question]", "Optional question about the image", "Describe this image in detail.")
     .option("--model <model>", "Gemini model override")
     .action(async (image: string, question: string, opts: { model?: string }) => {
-      log.dim(`Using ${opts.model ?? IMAGEN_MODEL}`);
+      log.dim(`Using ${opts.model ?? VISION_MODEL}`);
 
       try {
         const text = await describeImage(image, question, opts.model);

@@ -20,7 +20,6 @@ import { loadImageAsBase64, writeGeneratedImage } from "./util";
 import { describeImage } from "./describe";
 
 interface GenerateOpts {
-  model?: string;
   inspect?: string | true;
   attempts?: string;
   judge?: string;
@@ -80,20 +79,19 @@ export function registerGenerate(program: Command): void {
     .description("Generate an image from a text prompt")
     .argument("<output>", "Output file path (e.g., /tmp/image.png)")
     .argument("<prompt...>", "Text prompt describing the desired image")
-    .option("--model <model>", "Gemini model override")
     .option(
       "--ref <path>",
       "Reference image to generate from (repeatable)",
       (value: string, previous: string[]) => previous.concat(value),
       [] as string[]
     )
-    .option("--aspect <ratio>", "Aspect ratio (e.g. 1:1, 16:9, 3:2, 5:4)")
-    .option("--size <size>", "Image size: 512, 1K, 2K, 4K (default 1K)")
+    .option("--aspect <ratio>", "Aspect ratio (e.g. 1:1, 16:9, 4:1, 1:8)")
+    .option("--size <size>", "Image size: 1K, 2K, 4K (default 1K)")
     .option("--inspect [question]", "Auto-describe the result after generation")
     .option("--attempts <n>", "Generate N times and keep the best")
     .option("--judge <criteria>", "AI judging criteria (requires --attempts)")
     .action(async (output: string, promptParts: string[], opts: GenerateOpts) => {
-      const model = opts.model ?? IMAGEN_MODEL;
+      const model = IMAGEN_MODEL;
       const prompt = promptParts.join(" ");
       const attempts = opts.attempts ? parseInt(opts.attempts, 10) : 1;
       const refs = opts.ref ?? [];

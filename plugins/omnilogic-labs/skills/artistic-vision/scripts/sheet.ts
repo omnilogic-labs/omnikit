@@ -9,7 +9,7 @@ import { mkdirSync } from "fs";
 import { join } from "path";
 import { Command } from "commander";
 import sharp from "sharp";
-import { IMAGEN_MODEL, generateStructuredContent, type Part } from "./google";
+import { VISION_MODEL, generateStructuredContent, type Part } from "./google";
 import { log } from "./log";
 import {
   loadImageAsBase64,
@@ -148,7 +148,7 @@ export function registerSheet(program: Command): void {
     .action(async (image: string, opts: { frame?: string; model?: string; json?: boolean }) => {
       if (opts.json) log.toStderr();
 
-      const model = opts.model ?? IMAGEN_MODEL;
+      const model = opts.model ?? VISION_MODEL;
       const metadata = await sharp(image).metadata();
       const imgWidth = metadata.width!;
       const imgHeight = metadata.height!;
