@@ -9,6 +9,11 @@ const TOOL_NAME = "external_worker";
 const ROOT = "/tmp/omnilogic-labs/workers";
 const POLL_MS = 1000;
 const DEFAULT_TIMEOUT_SEC = 1800;
+// A background Bash call is stopped at its `timeout` (10 minutes when left
+// out, 2 hours at most), so the job's call passes one a minute past the
+// worker's own limit, and that limit stops short of the cap.
+const BASH_BG_MAX_MS = 7_200_000;
+const MAX_TIMEOUT_SEC = BASH_BG_MAX_MS / 1000 - 60;
 const ENGINES: readonly WorkerEngine[] = ["codex", "agy", "fake"];
 const RUNNER = "omnilogic-labs:external-runner";
 // How much of the task a transcript row shows; the job dir keeps all of it.
@@ -72,6 +77,30 @@ function summarize(line: string): string {
 // tool.check hook allows exactly these strings for known jobs.
 const watchCommand = (root: string, dir: string) =>
   `bash ${q(`${root}/hooks/watch-worker.sh`)} ${q(dir)}`;
+
+// The plugin files whose change on disk this session would not see until
+// /reload-plugins: the agent definition loads once, like this module.
+const LOADED_FILES = ["agents/external-runner.md", "hooks/register.tsx", "hooks/watch-worker.sh"];
+let loaded: Map<string, string | null> | null = null;
+
+async function snapshot($: EngineInterface): Promise<Map<string, string | null>> {
+  const files = new Map<string, string | null>();
+  for (const f of LOADED_FILES) files.set(f, await readText($, `${$.plugin.root}/${f}`));
+  return files;
+}
+
+// A sentence for the tool result when the plugin changed since this session
+// loaded it, else "".
+async function staleWarning($: EngineInterface): Promise<string> {
+  if (loaded === null) return "";
+  const now = await snapshot($);
+  const changed = LOADED_FILES.filter((f) => now.get(f) !== loaded?.get(f));
+  if (changed.length === 0) return "";
+  return (
+    ` WARNING: omnilogic-labs changed on disk since this session loaded it (${changed.join(", ")}); ` +
+    "tell the user to run /reload-plugins so the external-runner agent and this tool match."
+  );
+}
 
 // Module-local: timers die with a reload, so session.start re-arms them.
 const timers = new Map<string, { cancel: () => void }>();
@@ -155,6 +184,7 @@ function poll($: EngineInterface, id: string): void {
 export const register: Register = (on) => {
   on("session.start", async ($, e, next) => {
     const started = await next(e);
+    loaded = await snapshot($);
     await $.tool.register({
       name: TOOL_NAME,
       description:
@@ -184,7 +214,7 @@ export const register: Register = (on) => {
           },
           timeoutSec: {
             type: "number",
-            description: `Optional wall-clock limit in seconds (default ${DEFAULT_TIMEOUT_SEC}).`,
+            description: `Optional wall-clock limit in seconds (default ${DEFAULT_TIMEOUT_SEC}, at most ${MAX_TIMEOUT_SEC}).`,
           },
         },
         required: ["task", "engine"],
@@ -303,7 +333,7 @@ export const register: Register = (on) => {
     const cwd = optional(input.cwd) || (await $.session.root());
     const timeoutSec =
       typeof input.timeoutSec === "number" && input.timeoutSec > 0
-        ? Math.floor(input.timeoutSec)
+        ? Math.min(Math.floor(input.timeoutSec), MAX_TIMEOUT_SEC)
         : DEFAULT_TIMEOUT_SEC;
     if ([cwd, model, effort].some((v) => v.includes("\n"))) {
       return { deny: "external_worker cwd, model and effort must be single lines." };
@@ -376,6 +406,7 @@ export const register: Register = (on) => {
       command: `bash ${q(`${$.plugin.root}/hooks/run-worker.sh`)} ${q(dir)}`,
       description: `${engine} worker job ${id}`,
       run_in_background: true,
+      timeout: (timeoutSec + 60) * 1000,
     });
     if (ran.deny !== undefined || ran.isError) {
       const error =
@@ -393,7 +424,9 @@ export const register: Register = (on) => {
     return {
       result:
         `Started ${engine} job ${id} as background task ${taskId ?? "(none)"} in ${cwd}. ` +
-        `Output dir: ${dir}. Watch: ${watchCommand($.plugin.root, dir)}`,
+        `Output dir: ${dir}.${await staleWarning($)} Now run the Watch command with Bash, again ` +
+        `after each RUNNING, and reply only once it prints DONE or STALE. ` +
+        `Watch: ${watchCommand($.plugin.root, dir)}`,
     };
   }).catch(() => ({
     deny: "external_worker failed to start the job (hook error or timeout); see the debug log.",

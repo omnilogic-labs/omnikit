@@ -23,10 +23,13 @@
 set -e
 
 if [ "$1" = "--fake" ]; then
-  # Harmless stand-in engine: three JSONL lines a second apart, then a final
-  # message. Runs as its own process so coreutils timeout can wrap it.
+  # Harmless stand-in engine: JSONL lines a second apart, then a final message.
+  # Three lines, or N for a task that starts with "steps=N" (to test long jobs).
+  # Runs as its own process so coreutils timeout can wrap it.
   task=$(cat "$2/task.txt")
-  for i in 1 2 3; do
+  steps=3
+  if [[ $task =~ ^steps=([0-9]+) ]]; then steps=${BASH_REMATCH[1]}; fi
+  for ((i = 1; i <= steps; i++)); do
     printf '{"type":"item","n":%d,"text":"step %d"}\n' "$i" "$i"
     sleep 1
   done

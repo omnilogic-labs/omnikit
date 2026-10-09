@@ -6,7 +6,7 @@ import type { WorkerJob } from "../types";
 const SESSION = "sess-1234";
 const TOOL = "mcp__omnilogic-labs__external_worker";
 // The tool runs only inside a subagent's loop (the external-runner agent).
-const RUNNER = { agentId: "agent-runner-1" } as never;
+const RUNNER: { agentId: string } = { agentId: "agent-runner-1" };
 
 // On Windows the engine resolves $.fs paths against the current drive before
 // the hooks below see them (/repo arrives as D:\repo), so the in-memory
@@ -18,6 +18,7 @@ const key = (path: string) => path.replace(/^[A-Za-z]:/, "").replaceAll("\\", "/
 function world(on: On, options: { denyBash?: boolean } = {}) {
   const files = new Map<string, string>();
   const bash: string[] = [];
+  const timeouts: (number | undefined)[] = [];
   const toasts: string[] = [];
   on("session.id", async () => ({ value: SESSION }));
   on("session.root", async () => ({ value: "/repo" }));
@@ -49,7 +50,9 @@ function world(on: On, options: { denyBash?: boolean } = {}) {
   });
   on("tool.call", { tool: "Bash" }, async (_$, e) => {
     if (options.denyBash === true) return { deny: "not allowed" };
-    bash.push(String((e as unknown as { command: string }).command));
+    const call = e as unknown as { command: string; timeout?: number };
+    bash.push(String(call.command));
+    timeouts.push(call.timeout);
     return { result: { backgroundTaskId: "bg-1" } };
   });
   // The plugin's state as it writes it ($.state is the kit's, beneath the test).
@@ -58,7 +61,7 @@ function world(on: On, options: { denyBash?: boolean } = {}) {
     state.jobs = e.value as WorkerJob[];
     return next(e);
   });
-  return { files, bash, toasts, state };
+  return { files, bash, timeouts, toasts, state };
 }
 
 test("a fake job moves from running to done when exit appears", async ($, on) => {
@@ -77,6 +80,8 @@ test("a fake job moves from running to done when exit appears", async ($, on) =>
   expect(w.files.get(`${job?.dir}/params`)).toBe("fake\n/repo\n1800\n\n\n");
   expect(w.bash).toHaveLength(1);
   expect(w.bash[0]).toContain("/hooks/run-worker.sh'");
+  // Without a timeout, Claude Code stops a background command at 10 minutes.
+  expect(w.timeouts).toEqual([(1800 + 60) * 1000]);
 
   // Still running while the stream grows and no exit file exists.
   w.files.set(`${job?.dir}/stream.jsonl`, '{"n":1}\n{"n":2}\n');
@@ -256,4 +261,13 @@ test("the transcript row shows a short task, not the whole prompt", async ($, on
   expect(text).toContain(`(${long.length} chars)`);
   expect(text).not.toContain("END-OF-TASK");
   await ui.unmount();
+});
+
+test("timeoutSec is capped below the 2 hour background limit", async ($, on) => {
+  mock.clock(on, { now: 1_000 });
+  const w = world(on);
+  await $.tool.call({ tool: TOOL, task: "x", engine: "fake", timeoutSec: 99_999, ...RUNNER });
+  const [job] = w.state.jobs;
+  expect(job?.timeoutSec).toBe(7_140);
+  expect(w.timeouts).toEqual([7_200_000]);
 });
