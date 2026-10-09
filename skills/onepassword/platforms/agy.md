@@ -5,7 +5,7 @@ Reads secrets from 1Password and hands them to whatever needs them (an SSH key i
 ## Rules
 
 1. Use the helper `bin/op-secret` (path relative to this SKILL.md's directory). Do not hand-roll `op` or `op.exe` calls. The helper resolves the binary, reveals concealed fields, strips `\r` and wrapping quotes, writes mode 600, and caches. It is a bash script: on Windows run it from Git Bash, or from PowerShell as `& "$env:ProgramFiles\Git\bin\bash.exe" <skill dir>/bin/op-secret ...`, never bare (Windows opens an "Open with" dialog and hangs).
-2. `command -v op` returning nothing does not mean 1Password is unavailable. On WSL the CLI is `op.exe`, and the helper finds it.
+2. On WSL, `op` failing does not mean you lack access. A missing `op`, or "No accounts configured for use with 1Password CLI", usually means the wrong binary: the working CLI is the Windows `op.exe` (often off PATH, under WinGet), which uses the desktop app. The helper tries each binary and uses the first that lists an account. For raw `op` commands, use the binary it names in errors, or set `OP_BIN`.
 3. "account is not signed in" means the desktop app's CLI integration is off or the app is locked. Ask the user to enable Settings, Developer, Integrate with 1Password CLI and unlock the app; the first read then shows a one-time desktop approval. Then retry.
 4. Item titles with spaces and parens are fine: `bin/op-secret --item "render api key (claude)" --field notesPlain --out FILE`.
 5. Never print a secret. No `cat` of a key file, no `echo "$TOKEN"`. Verify with `head -1 file`, `wc -c file`, or `ssh-keygen -y -f file`.

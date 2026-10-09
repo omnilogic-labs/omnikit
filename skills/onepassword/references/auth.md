@@ -29,10 +29,19 @@ eval "$(op signin --account my.1password.com)"
 
 ## WSL: op.exe and the Windows app
 
-On WSL there is usually no native Linux `op`. Instead the Windows 1Password CLI
-is reachable from the Linux shell as `op.exe`, and it talks to the Windows
-desktop app for unlock. The `op-secret` helper detects this automatically
-(native `op` first, then `op.exe`).
+On WSL the working CLI is usually the Windows 1Password CLI, `op.exe`, which
+talks to the Windows desktop app for unlock. It is often not on PATH: WinGet
+installs it under
+`/mnt/c/Users/<you>/AppData/Local/Microsoft/WinGet/Packages/AgileBits.1Password.CLI_*/op.exe`.
+A Linux `op` may also be installed and shadow it; with no accounts of its own it
+fails with "No accounts configured for use with 1Password CLI", which means the
+wrong binary, not no access.
+
+The `op-secret` helper handles this: under WSL it tries `op.exe` on PATH, the
+WinGet and installer paths, then Linux `op`, and uses the first that lists an
+account (`op account list`). Set `OP_BIN` to force one. With
+`OP_SERVICE_ACCOUNT_TOKEN` set it prefers Linux `op`, because WSL passes the
+token to `op.exe` only when `WSLENV` names it.
 
 Things to know under WSL:
 
