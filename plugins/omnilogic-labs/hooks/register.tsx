@@ -10,6 +10,9 @@ const ROOT = "/tmp/omnilogic-labs/workers";
 const POLL_MS = 1000;
 const DEFAULT_TIMEOUT_SEC = 1800;
 const ENGINES: readonly WorkerEngine[] = ["codex", "agy", "fake"];
+const RUNNER = "omnilogic-labs:external-runner";
+// How much of the task a transcript row shows; the job dir keeps all of it.
+const TASK_PREVIEW = 80;
 
 const jobs = atom({ plugin: "omnilogic-labs", key: "jobs" } as const, []);
 
@@ -64,6 +67,11 @@ function summarize(line: string): string {
   }
   return cut(line);
 }
+
+// The one Bash command the external-runner agent runs to follow a job; the
+// tool.check hook allows exactly these strings for known jobs.
+const watchCommand = (root: string, dir: string) =>
+  `bash ${q(`${root}/hooks/watch-worker.sh`)} ${q(dir)}`;
 
 // Module-local: timers die with a reload, so session.start re-arms them.
 const timers = new Map<string, { cancel: () => void }>();
@@ -150,11 +158,11 @@ export const register: Register = (on) => {
     await $.tool.register({
       name: TOOL_NAME,
       description:
-        "Start an external coding worker (codex exec, agy -p, or the harmless fake engine) on a " +
-        "self-contained task, in the background. Returns at once with a job id and output " +
-        "directory. When the job ends a background task notification arrives; read the " +
-        "output file it names, which ends with the worker's final message. Do not poll, " +
-        "sleep, or read the job files to wait for it.",
+        `Do not call this from the main conversation: dispatch the ${RUNNER} agent instead, ` +
+        "which calls it, follows the job as a visible subagent and replies with the final " +
+        "message. Starts an external coding worker (codex exec, agy -p, or the harmless fake " +
+        "engine) on a self-contained task, in the background, and returns a job id, output " +
+        "directory and a Watch command that follows the job until it ends.",
       inputSchema: {
         type: "object",
         properties: {
@@ -255,7 +263,34 @@ export const register: Register = (on) => {
     );
   });
 
-  on("tool.call", { tool: "mcp__omnilogic-labs__external_worker" }, async ($, e) => {
+  // Show a short task on the call's transcript row, not the whole prompt.
+  on("ui.render", { component: "ToolUse" }, (_$, e, next) => {
+    const input = (e.props.input ?? {}) as WorkerInput;
+    if (e.props.tool !== `mcp__omnilogic-labs__${TOOL_NAME}`) return next(e);
+    if (typeof input.task !== "string" || input.task.length <= TASK_PREVIEW) return next(e);
+    const task = `${input.task.replace(/\s+/g, " ").slice(0, TASK_PREVIEW)}... (${input.task.length} chars)`;
+    return next({ ...e, props: { ...e.props, input: { ...input, task } } });
+  });
+
+  // The external-runner agent follows its job with the Watch command; allow
+  // exactly that command for a known job, from a subagent, without a prompt.
+  on("tool.check", { tool: "Bash" }, async ($, e, next) => {
+    const command = (e.input as { command?: unknown } | undefined)?.command;
+    if (e.agentId === undefined || typeof command !== "string") return next(e);
+    const known = (await read($, jobs)).some((j) => watchCommand($.plugin.root, j.dir) === command);
+    return known ? { decision: "allow", reason: "external_worker Watch command" } : next(e);
+  });
+
+  on("tool.call", { tool: "mcp__omnilogic-labs__external_worker" }, async ($, e, next) => {
+    // The main loop's own call runs a job nobody can watch; send it to the agent.
+    if (e.agentId === undefined && next.origin.plugin === "engine") {
+      return {
+        deny:
+          `Do not call external_worker from the main conversation. Dispatch the ${RUNNER} ` +
+          "agent with engine, task and cwd (and model, effort or timeoutSec if needed); it " +
+          "starts the job, shows its progress, and replies with the final message.",
+      };
+    }
     const input = e as unknown as WorkerInput;
     const task = typeof input.task === "string" ? input.task : "";
     const engine = input.engine as WorkerEngine;
@@ -358,8 +393,7 @@ export const register: Register = (on) => {
     return {
       result:
         `Started ${engine} job ${id} as background task ${taskId ?? "(none)"} in ${cwd}. ` +
-        `Output dir: ${dir}. When that task's notification arrives, read the output file it ` +
-        `names for the final message; do not poll.`,
+        `Output dir: ${dir}. Watch: ${watchCommand($.plugin.root, dir)}`,
     };
   }).catch(() => ({
     deny: "external_worker failed to start the job (hook error or timeout); see the debug log.",

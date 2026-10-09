@@ -5,6 +5,8 @@ import type { WorkerJob } from "../types";
 
 const SESSION = "sess-1234";
 const TOOL = "mcp__omnilogic-labs__external_worker";
+// The tool runs only inside a subagent's loop (the external-runner agent).
+const RUNNER = { agentId: "agent-runner-1" } as never;
 
 // On Windows the engine resolves $.fs paths against the current drive before
 // the hooks below see them (/repo arrives as D:\repo), so the in-memory
@@ -63,7 +65,7 @@ test("a fake job moves from running to done when exit appears", async ($, on) =>
   const clock = mock.clock(on, { now: 1_000 });
   const w = world(on);
 
-  const started = await $.tool.call({ tool: TOOL, task: "SENTINEL-42", engine: "fake" });
+  const started = await $.tool.call({ tool: TOOL, task: "SENTINEL-42", engine: "fake", ...RUNNER });
   expect(started.deny).toBeUndefined();
   expect(String(started.result)).toContain("bg-1");
 
@@ -96,7 +98,7 @@ test("a missing cwd fails the job with a non-zero exit and no Bash call", async 
   mock.clock(on, { now: 1_000 });
   const w = world(on);
 
-  await $.tool.call({ tool: TOOL, task: "x", engine: "fake", cwd: "/nope" });
+  await $.tool.call({ tool: TOOL, task: "x", engine: "fake", cwd: "/nope", ...RUNNER });
   const [job] = w.state.jobs;
   expect(job?.status).toBe("failed");
   expect(job?.exitCode).toBe(2);
@@ -108,7 +110,7 @@ test("a denied Bash call marks the job failed", async ($, on) => {
   mock.clock(on, { now: 1_000 });
   const w = world(on, { denyBash: true });
 
-  const ran = await $.tool.call({ tool: TOOL, task: "x", engine: "fake" });
+  const ran = await $.tool.call({ tool: TOOL, task: "x", engine: "fake", ...RUNNER });
   expect(ran.deny ?? ran.text).toContain("not allowed");
   const [job] = w.state.jobs;
   expect(job?.status).toBe("failed");
@@ -135,8 +137,8 @@ test("the band shows one line per running job and falls through at zero", async 
   expect(JSON.stringify(await idle.drawn())).toContain(SENTINEL);
   await idle.unmount();
 
-  await $.tool.call({ tool: TOOL, task: "one", engine: "fake" });
-  await $.tool.call({ tool: TOOL, task: "two", engine: "codex" });
+  await $.tool.call({ tool: TOOL, task: "one", engine: "fake", ...RUNNER });
+  await $.tool.call({ tool: TOOL, task: "two", engine: "codex", ...RUNNER });
   await clock.advance(65_000);
   const ui = await $.ui.mount({
     plugin: "omnilogic-labs",
@@ -158,7 +160,7 @@ test("the band shows one line per running job and falls through at zero", async 
 test("the band summarizes codex item.completed lines", async ($, on) => {
   const clock = mock.clock(on, { now: 1_000 });
   const w = world(on);
-  await $.tool.call({ tool: TOOL, task: "x", engine: "codex" });
+  await $.tool.call({ tool: TOOL, task: "x", engine: "codex", ...RUNNER });
   const [job] = w.state.jobs;
   w.files.set(
     `${job?.dir}/stream.jsonl`,
@@ -178,7 +180,7 @@ test("the band summarizes codex item.completed lines", async ($, on) => {
 test("the workers pane tails the stream with status", async ($, on) => {
   const clock = mock.clock(on, { now: 1_000 });
   const w = world(on);
-  await $.tool.call({ tool: TOOL, task: "x", engine: "fake" });
+  await $.tool.call({ tool: TOOL, task: "x", engine: "fake", ...RUNNER });
   const [job] = w.state.jobs;
   w.files.set(`${job?.dir}/stream.jsonl`, '{"n":1}\n{"n":2}\n');
   w.files.set(`${job?.dir}/exit`, "0\n");
@@ -194,5 +196,64 @@ test("the workers pane tails the stream with status", async ($, on) => {
   expect(text).toContain("done");
   expect(text).toContain("exit 0");
   expect(text).toContain('{\\"n\\":2}');
+  await ui.unmount();
+});
+
+test("a call from the main loop is denied and points at the external-runner agent", async ($, on) => {
+  mock.clock(on, { now: 1_000 });
+  const w = world(on);
+
+  const ran = await $.tool.call({ tool: TOOL, task: "x", engine: "fake" });
+  expect(ran.deny).toContain("omnilogic-labs:external-runner");
+  expect(w.state.jobs).toHaveLength(0);
+  expect(w.bash).toHaveLength(0);
+});
+
+test("the result names a Watch command that tool.check allows only for that job", async ($, on) => {
+  mock.clock(on, { now: 1_000 });
+  const w = world(on);
+  on("tool.check", { tool: "Bash" }, async () => ({ decision: "ask" as const }));
+
+  const started = await $.tool.call({ tool: TOOL, task: "x", engine: "fake", ...RUNNER });
+  const [job] = w.state.jobs;
+  const watch = /Watch: (.+)$/.exec(String(started.result))?.[1] ?? "";
+  expect(watch).toContain("/hooks/watch-worker.sh'");
+  expect(watch).toContain(`'${job?.dir}'`);
+
+  const check = (command: string, agentId?: string) =>
+    $.tool.check({ tool: "Bash", input: { command }, ...(agentId ? { agentId } : {}) } as never);
+  expect((await check(watch, "agent-runner-1")).decision).toBe("allow");
+  expect((await check(`${watch}; rm -rf /`, "agent-runner-1")).decision).toBe("ask");
+  expect((await check(watch)).decision).toBe("ask");
+});
+
+test("the transcript row shows a short task, not the whole prompt", async ($, on) => {
+  on(
+    "ui.render",
+    { component: "ToolUse" },
+    async (_$, e) =>
+      ({
+        type: "Text",
+        props: {},
+        children: [String((e.props.input as { task: string }).task)],
+      }) as never
+  );
+  const long = `${"word ".repeat(100)}END-OF-TASK`;
+  const ui = await $.ui.mount({
+    plugin: "omnilogic-labs",
+    surface: "terminal",
+    component: "ToolUse",
+    props: {
+      tool_use_id: "tu-1",
+      tool: TOOL,
+      input: { engine: "codex", task: long },
+      isRunning: true,
+      isErrored: false,
+      isInterrupted: false,
+    } as never,
+  });
+  const text = JSON.stringify(await ui.drawn());
+  expect(text).toContain(`(${long.length} chars)`);
+  expect(text).not.toContain("END-OF-TASK");
   await ui.unmount();
 });

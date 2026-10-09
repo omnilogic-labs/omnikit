@@ -41,13 +41,12 @@ work.
 
 ## External workers
 
-Any role can be run by Codex or agy. Two ways:
+Any role can be run by Codex or agy. Dispatch one `omnilogic-labs:external-runner` agent per job, in the
+background when you run several. Tell it `engine` (`codex` or `agy`), the `task`, and the worktree path as `cwd`.
+Optional: `model`, `effort`, `timeoutSec`.
 
-- Dispatch the `omnilogic-labs:external-runner` agent (a visible subagent row). Tell it `engine` (`codex` or
-  `agy`), the `task`, and the worktree path as `cwd`.
-- Or call the `mcp__omnilogic-labs__external_worker` tool directly with `engine`, `task` and `cwd`. Optional: `model`, `effort`,
-  `timeoutSec`.
+The runner shows as a subagent row: open it to see the worker's progress, or run `/workers`. It replies with the
+worker's exit code, job dir and final message, so its reply is the answer. Ignore the separate background task
+notification for the same job. Never call `mcp__omnilogic-labs__external_worker` yourself: from the main conversation it is refused.
 
-Always pass the worktree path as `cwd`; it defaults to the session root. The job runs in the background. When it
-ends you get a task notification with a short summary and an `output_file` path. Read that file once: it holds
-the final answer. Do not poll.
+Always pass the worktree path as `cwd`; it defaults to the session root.
