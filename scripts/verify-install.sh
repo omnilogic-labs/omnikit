@@ -274,8 +274,12 @@ check_codex_agy() {
   local entry n=0
   say ""
   say "Codex and agy skill and agent links"
-  check_links codex-links "$AGENTS_SKILLS_DIR" "$DIST/codex"
-  check_agent_links codex-agent-links "$CODEX_AGENTS_DIR" "$DIST/codex" .toml "${CODEX_AGENTS[@]}"
+  if has codex || [ -d "$CODEX_AGENTS_DIR" ]; then
+    check_links codex-links "$AGENTS_SKILLS_DIR" "$DIST/codex"
+    check_agent_links codex-agent-links "$CODEX_AGENTS_DIR" "$DIST/codex" .toml "${CODEX_AGENTS[@]}"
+  else
+    result skip codex-links "codex not on PATH"
+  fi
 
   for entry in "$CODEX_SKILLS_DIR"/*; do
     [ -L "$entry" ] || continue
