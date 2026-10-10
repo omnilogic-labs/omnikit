@@ -23,7 +23,8 @@ Read the repo's `AGENTS.md` (or `CLAUDE.md`) and the code you need first. Plan f
    - **Tier:** `fast` for rote or straightforward work, `deep` for anything complicated. Write the tier, never
      a model name.
    - **Depends on:** other task names, or none.
-   - **Acceptance criteria**, in two numbered lists:
+   - **Acceptance criteria**, in two numbered lists. Either list may be empty: a pure look task can have no
+     checks beyond the repo's check command, and a plumbing task has no judged goals.
      - **Checks**, for objective outcomes: it builds, tests pass, the feature behaves, a real measured
        performance figure. Each names the exact command to run or thing to inspect, with the expected result.
        The repo's check command is always one of them.
@@ -33,13 +34,16 @@ Read the repo's `AGENTS.md` (or `CLAUDE.md`) and the code you need first. Plan f
 3. **Waves:** which tasks run together, in order.
 4. **Risks:** what might block, and what needs the owner.
 
+Write only the outcomes that matter for the task. Never invent a goal, check or criterion to fill a list or
+because a plan feels like it needs criteria: a made-up criterion is worse than none, because builders chase it.
+
 Never turn a subjective goal into a made-up objective proxy: no colour-difference thresholds, ratios or pixel
 counts standing in for "looks like the concept art". The builder chases the proxy instead of the goal. Use a
 number only when there is a reason for it and it makes sense, such as a real budget or a measured baseline. When
 a task changes work that tries to meet an existing number, ask whether that number still helps, and say so in the
 plan if it does not.
 
-Size each task for one builder in one focused session. A plan always ends each task with its acceptance criteria.
+Size each task for one builder in one focused session. A plan always ends each task with its acceptance criteria, even when that is only the repo's check command.
 
 **Rescope.** After two failed verifications, read the task, the verify reports, and the branch. Then write a
 revised task (`<task>-v2`), split it, or say it needs an owner decision and why. A judged goal that keeps missing

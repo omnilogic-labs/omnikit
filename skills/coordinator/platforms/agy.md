@@ -11,8 +11,11 @@ do that in their own contexts and send back short reports.
    **Checks** cover objective outcomes (it builds, tests pass, the feature behaves, real measured performance),
    each naming the command or inspection that verifies it. **Judged goals** cover subjective outcomes (look,
    feel, style, "matches the reference"): the goal as stated, its reference, and who judges it. Never let a plan
-   turn a judged goal into a made-up number. Use a number only when there is a reason for it and it makes sense;
-   when changing work that tries to meet an existing number, ask whether that number still helps.
+   turn a judged goal into a made-up number. Either kind may be empty: a pure look task can have no checks
+   beyond the repo's check command, and a plumbing task has no judged goals. A plan lists only the outcomes that
+   matter; a criterion invented to fill a list is worse than none, because builders chase it. Use a number only
+   when there is a reason for it and it makes sense; when changing work that tries to meet an existing number,
+   ask whether that number still helps.
 3. **Builders use the fast tier for rote or straightforward work, and the deep tier for complicated
    implementations.** Each builder works in its own git worktree.
 4. **Verifiers use the fast tier per task, and the deep tier for a milestone review.** A verifier reports
