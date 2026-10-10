@@ -76,6 +76,9 @@ report() {
             | if .type == "item.completed" and $i.type == "agent_message" then "said: \($i.text)"
               elif .type == "item.started" and $i.type == "command_execution" then "ran: \($i.command)"
               elif .type == "item.completed" and $i.type == "file_change" then "edited: \([$i.changes[]?.path] | join(", "))"
+              elif .type == "item.completed" and $i.type == "web_search" then "searched: \($i.query // "")"
+              elif .type == "item.completed" and $i.type == "collab_tool_call"
+                then "subagents: \($i.tool) \($i.prompt // "") \($i.agents_states // {} | to_entries | map("\(.key[0:8]) \(.value.status // .value | tostring)") | join(", "))"
               elif .type == "item.completed" and ($i.type | test("command_execution|agent_message|reasoning") | not)
                 then "\($i.type): \($i.text // "")"
               else empty end | gsub("\\s+"; " ")' 2> /dev/null \
