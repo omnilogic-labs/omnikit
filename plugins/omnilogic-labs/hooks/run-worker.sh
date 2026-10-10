@@ -5,7 +5,8 @@
 #
 # The job dir holds what the hook wrote before calling this:
 #   task.txt   the task, verbatim
-#   params     one value per line: engine, cwd, timeoutSec, model, effort
+#   params     one value per line: engine, cwd, timeoutSec, model, effort,
+#              sandbox (none, workspace-write or read-only)
 # and what this script writes:
 #   stream.jsonl  the engine's JSONL events (stdout only)
 #   stderr.log    the engine's stderr, kept apart so stream.jsonl stays valid
@@ -49,8 +50,10 @@ fi
   IFS= read -r timeout_sec || true
   IFS= read -r model || true
   IFS= read -r effort || true
+  IFS= read -r sandbox || true
 } < "$dir/params"
 timeout_sec=${timeout_sec:-1800}
+sandbox=${sandbox:-none}
 
 finish() {
   local rc=$1
@@ -82,14 +85,23 @@ task=$(cat "$dir/task.txt")
 rc=0
 case "$engine" in
   codex)
-    args=(exec -s workspace-write --json -C "$cwd" -o "$dir/last.txt")
+    args=(exec --json -C "$cwd" -o "$dir/last.txt")
+    case "$sandbox" in
+      none) args+=(--dangerously-bypass-approvals-and-sandbox) ;;
+      *) args+=(-s "$sandbox") ;;
+    esac
     [ -n "$model" ] && args+=(-m "$model")
     [ -n "$effort" ] && args+=(-c "model_reasoning_effort=\"$effort\"")
     timeout "$timeout_sec" codex "${args[@]}" "$task" \
       < /dev/null > "$dir/stream.jsonl" 2> "$dir/stderr.log" || rc=$?
     ;;
   agy)
-    args=(-p "$task" --output-format stream-json --mode accept-edits)
+    args=(-p "$task" --output-format stream-json)
+    case "$sandbox" in
+      none) args+=(--mode accept-edits --dangerously-skip-permissions) ;;
+      workspace-write) args+=(--mode accept-edits --sandbox) ;;
+      read-only) args+=(--mode plan --sandbox) ;;
+    esac
     [ -n "$model" ] && args+=(--model "$model")
     [ -n "$effort" ] && args+=(--effort "$effort")
     timeout "$timeout_sec" agy "${args[@]}" \

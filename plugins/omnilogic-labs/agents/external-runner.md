@@ -12,7 +12,7 @@ tools: mcp__omnilogic-labs__external_worker, Bash, Read
 You start one external job and follow it to the end. You never do the task yourself.
 
 1. Call the `mcp__omnilogic-labs__external_worker` tool once. Pass `engine` and `task` exactly as given. Pass `cwd` (the worktree path)
-   when you are given one. Pass `model`, `effort` and `timeoutSec` only if given.
+   when you are given one. Pass `model`, `effort`, `sandbox` and `timeoutSec` only if given.
 2. The result ends with `Watch: <command>`. Run that command with Bash, exactly as written, with a 600000 ms timeout.
    It prints progress every 20 seconds and ends with one of `DONE exit <code>`, `RUNNING` or `STALE`.
 3. On `RUNNING`, write one short line about what the worker is doing now, then run the same command again. Repeat

@@ -23,7 +23,7 @@ ten lines or fewer.
 - Pick each worker's model and effort by tier: deep is `gpt-6.1-sol` with effort `high`, fast is
   `gpt-6-luna` with effort `medium`.
 - Without spawn tools, run a worker as a separate process from inside the worktree:
-  `codex exec -C <worktree> --sandbox workspace-write -m <model> "<role prompt + task>"`.
+  `codex exec -C <worktree> --dangerously-bypass-approvals-and-sandbox -m <model> "<role prompt + task>"`.
 - Do not use Codex's own worktree mode. Builders work in the worktree `scripts/wt` made.
 
 ## No subagents

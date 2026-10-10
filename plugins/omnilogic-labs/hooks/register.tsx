@@ -15,6 +15,11 @@ const DEFAULT_TIMEOUT_SEC = 1800;
 const BASH_BG_MAX_MS = 7_200_000;
 const MAX_TIMEOUT_SEC = BASH_BG_MAX_MS / 1000 - 60;
 const ENGINES: readonly WorkerEngine[] = ["codex", "agy", "fake"];
+// none runs the worker unsandboxed: a git worktree's .git lives outside its
+// cwd and workers often need the network, so a sandbox breaks commits and tools.
+const SANDBOXES = ["none", "workspace-write", "read-only"] as const;
+type Sandbox = (typeof SANDBOXES)[number];
+const DEFAULT_SANDBOX: Sandbox = "none";
 const RUNNER = "omnilogic-labs:external-runner";
 // How much of the task a transcript row shows; the job dir keeps all of it.
 const TASK_PREVIEW = 80;
@@ -27,6 +32,7 @@ type WorkerInput = {
   cwd?: unknown;
   model?: unknown;
   effort?: unknown;
+  sandbox?: unknown;
   timeoutSec?: unknown;
 };
 
@@ -212,6 +218,14 @@ export const register: Register = (on) => {
             type: "string",
             description: "Optional reasoning effort (codex model_reasoning_effort, agy --effort).",
           },
+          sandbox: {
+            type: "string",
+            enum: [...SANDBOXES],
+            description:
+              `Optional sandbox (default ${DEFAULT_SANDBOX}). none runs unsandboxed with no approval prompts, so ` +
+              "the worker can commit in a worktree and reach the network; workspace-write limits writes to cwd; " +
+              "read-only allows no writes.",
+          },
           timeoutSec: {
             type: "number",
             description: `Optional wall-clock limit in seconds (default ${DEFAULT_TIMEOUT_SEC}, at most ${MAX_TIMEOUT_SEC}).`,
@@ -317,7 +331,7 @@ export const register: Register = (on) => {
       return {
         deny:
           `Do not call external_worker from the main conversation. Dispatch the ${RUNNER} ` +
-          "agent with engine, task and cwd (and model, effort or timeoutSec if needed); it " +
+          "agent with engine, task and cwd (and model, effort, sandbox or timeoutSec if needed); it " +
           "starts the job, shows its progress, and replies with the final message.",
       };
     }
@@ -327,6 +341,10 @@ export const register: Register = (on) => {
     if (task.trim() === "") return { deny: "external_worker needs a non-empty task." };
     if (!ENGINES.includes(engine)) {
       return { deny: `external_worker engine must be one of ${ENGINES.join(", ")}.` };
+    }
+    const sandbox = (optional(input.sandbox) || DEFAULT_SANDBOX) as Sandbox;
+    if (!SANDBOXES.includes(sandbox)) {
+      return { deny: `external_worker sandbox must be one of ${SANDBOXES.join(", ")}.` };
     }
     const model = optional(input.model);
     const effort = optional(input.effort);
@@ -382,7 +400,7 @@ export const register: Register = (on) => {
     await $.fs.write(`${dir}/task.txt`, task);
     await $.fs.write(
       `${dir}/params`,
-      [engine, cwd, String(timeoutSec), model, effort].join("\n") + "\n"
+      [engine, cwd, String(timeoutSec), model, effort, sandbox].join("\n") + "\n"
     );
 
     // A missing cwd fails the job here, without spending a background task.

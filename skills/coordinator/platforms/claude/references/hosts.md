@@ -43,7 +43,8 @@ work.
 
 Any role can be run by Codex or agy. Dispatch one `omnilogic-labs:external-runner` agent per job, in the
 background when you run several. Tell it `engine` (`codex` or `agy`), the `task`, and the worktree path as `cwd`.
-Optional: `model`, `effort`, `timeoutSec`.
+Optional: `model`, `effort`, `timeoutSec`, and `sandbox` (`none`, the default, so the worker can commit in its
+worktree and reach the network; or `workspace-write`, `read-only`).
 
 The runner shows as a subagent row: open it to see the worker's progress, or run `/workers`. It replies with the
 worker's exit code, job dir and final message, so its reply is the answer. Ignore the separate background task

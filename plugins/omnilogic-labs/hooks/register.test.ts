@@ -77,7 +77,7 @@ test("a fake job moves from running to done when exit appears", async ($, on) =>
   expect(job?.taskId).toBe("bg-1");
   expect(job?.dir).toBe(`/tmp/omnilogic-labs/workers/${SESSION}/${job?.id}`);
   expect(w.files.get(`${job?.dir}/task.txt`)).toBe("SENTINEL-42");
-  expect(w.files.get(`${job?.dir}/params`)).toBe("fake\n/repo\n1800\n\n\n");
+  expect(w.files.get(`${job?.dir}/params`)).toBe("fake\n/repo\n1800\n\n\nnone\n");
   expect(w.bash).toHaveLength(1);
   expect(w.bash[0]).toContain("/hooks/run-worker.sh'");
   // Without a timeout, Claude Code stops a background command at 10 minutes.
@@ -270,4 +270,22 @@ test("timeoutSec is capped below the 2 hour background limit", async ($, on) => 
   const [job] = w.state.jobs;
   expect(job?.timeoutSec).toBe(7_140);
   expect(w.timeouts).toEqual([7_200_000]);
+});
+
+test("sandbox defaults to none, passes a known mode through, and refuses others", async ($, on) => {
+  mock.clock(on, { now: 1_000 });
+  const w = world(on);
+  await $.tool.call({ tool: TOOL, task: "x", engine: "fake", sandbox: "read-only", ...RUNNER });
+  const [job] = w.state.jobs;
+  expect(w.files.get(`${job?.dir}/params`)).toBe("fake\n/repo\n1800\n\n\nread-only\n");
+
+  const bad = await $.tool.call({
+    tool: TOOL,
+    task: "x",
+    engine: "fake",
+    sandbox: "full",
+    ...RUNNER,
+  });
+  expect(bad.deny).toContain("sandbox must be one of none, workspace-write, read-only");
+  expect(w.bash).toHaveLength(1);
 });
