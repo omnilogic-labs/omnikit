@@ -1,0 +1,16 @@
+#!/bin/bash
+# questionnaire: build a decision questionnaire page from a JSON spec.
+# Usage: questionnaire <spec.json> <out dir>
+# Prints { page, files } JSON on stdout for the Artifact tool; status on stderr.
+set -e
+
+self=$(realpath "$0")
+lib="$(dirname "$(dirname "$self")")/lib/build.mjs"
+
+if command -v bun > /dev/null 2>&1; then
+  exec bun "$lib" "$@"
+elif command -v node > /dev/null 2>&1; then
+  exec node "$lib" "$@"
+fi
+echo "questionnaire: needs bun or node on PATH" >&2
+exit 1

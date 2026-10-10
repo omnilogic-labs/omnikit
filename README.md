@@ -12,6 +12,7 @@ One plugin, `omnilogic-labs`, carries every skill and agent. In Claude Code they
 - `onepassword`: read secrets through the `op` CLI
 - `plain-writing`: write prose a reader understands on the first pass
 - `primer`: turn a product idea into a build brief and task files
+- `questionnaire`: turn a JSON list of decisions into a page the owner answers and pastes back
 - `render`: Render.com blueprints, SSH, and REST API
 
 Agents: `planner`, `builder`, `verifier`, `browser-buddy`, and `external-runner`.
@@ -73,9 +74,9 @@ Success is exit 0 and a last stdout line of `summary pass=<n> fail=0 skip=0`. Ea
 
 What each tool should see:
 
-- Claude Code: all 7 skills and 5 agents (`planner`, `builder`, `verifier`, `browser-buddy`, `external-runner`).
-- Codex: the 7 skills, as linked from `dist/codex`, and 4 agents (no `external-runner`, which is Claude only). Ask with `codex exec -s read-only "list your skills" </dev/null`.
-- Antigravity: the 7 skills, unprefixed, and the same 4 agents. Ask with `agy -p "list your skills" --mode plan --sandbox </dev/null`.
+- Claude Code: all 8 skills and 5 agents (`planner`, `builder`, `verifier`, `browser-buddy`, `external-runner`).
+- Codex: the 8 skills, as linked from `dist/codex`, and 4 agents (no `external-runner`, which is Claude only). Ask with `codex exec -s read-only "list your skills" </dev/null`.
+- Antigravity: the 8 skills, unprefixed, and the same 4 agents. Ask with `agy -p "list your skills" --mode plan --sandbox </dev/null`.
 
 `bun run build` on its own writes `dist/` for `OMNIKIT_OS` if set, else the OS already recorded in `dist/*/.os`, else the detected OS, so `install-check` does not report `wrong-os` after it. `--os` overrides all three (`--os any` keeps every OS block). The committed trees (the Claude plugin and root `skills/`) are always any-OS.
 

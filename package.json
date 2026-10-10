@@ -27,10 +27,11 @@
     "verify:ask": "bash scripts/verify-install.sh --ask",
     "build": "bun scripts/build/build.ts",
     "build:check": "bun scripts/build/build.ts --check",
-    "test": "bun test scripts/build",
+    "test": "bun test scripts/build tests",
     "check": "prettier --check . && claude plugin validate --strict . && claude plugin validate --strict plugins/omnilogic-labs"
   },
   "devDependencies": {
+    "happy-dom": "^20.14.6",
     "prettier": "^3.8.2",
     "prettier-plugin-sh": "^0.18.1"
   }

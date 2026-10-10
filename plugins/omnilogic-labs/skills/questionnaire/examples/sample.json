@@ -1,0 +1,48 @@
+{
+  "title": "Rover art pass decisions",
+  "intro": "Three choices block the **art pass**. Each card says what happened and what each option costs. Pick *I don't know* to accept the stated default.",
+  "questions": [
+    {
+      "id": "style",
+      "title": "Which look should the rover models use?",
+      "tag": "Art direction",
+      "blocking": true,
+      "background": "The rover kit has 14 models. They share one material set, so this choice applies to all of them.",
+      "what_happened": "The first render pass mixed two styles:\n- the chassis is low poly with flat shading\n- the wheels use smooth normals and a PBR texture",
+      "images": [{ "path": "render.svg", "caption": "Pass 1 render of the chassis" }],
+      "options": [
+        {
+          "label": "Low poly, flat shading",
+          "value": "lowpoly",
+          "description": "Fast to make. About 2 days for all 14 models."
+        },
+        {
+          "label": "Smooth PBR",
+          "value": "pbr",
+          "description": "Closer to the concept art. About 6 days, and the wheel textures need a rework."
+        }
+      ],
+      "idk": "We use low poly for the demo and revisit after it ships."
+    },
+    {
+      "id": "targets",
+      "title": "Which platforms must the first build run on?",
+      "tag": "Scope",
+      "multi": true,
+      "background": "Each platform adds a test pass of about half a day.",
+      "options": [
+        { "label": "Windows", "value": "win" },
+        { "label": "macOS", "value": "mac" },
+        { "label": "Web", "value": "web", "description": "Needs the WebGL fallback shaders." }
+      ],
+      "idk": "We ship Windows only and add the others when asked."
+    },
+    {
+      "id": "names",
+      "title": "Should the parts keep their placeholder names?",
+      "background": "Parts are named `part_01` to `part_40` in the asset tree.",
+      "options": [{ "label": "Rename now" }, { "label": "Keep placeholders" }],
+      "idk": "We keep the placeholders until the art pass ends."
+    }
+  ]
+}

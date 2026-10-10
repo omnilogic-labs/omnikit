@@ -12,6 +12,7 @@ One plugin carrying every Omnilogic Labs skill and agent.
 - `onepassword`: reliable secret retrieval from 1Password through the `op` CLI.
 - `plain-writing`: how to write prose a reader understands on the first pass.
 - `primer`: turn a vague product idea into a build brief, task files, and a build run.
+- `questionnaire`: build a decision questionnaire page from JSON, with a paste-back answer block.
 - `render`: Render.com blueprints, SSH, hosting model, and REST API.
 
 ## Agents and binaries

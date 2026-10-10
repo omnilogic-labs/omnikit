@@ -20,6 +20,7 @@ Cross-platform agent skills by Omnilogic Labs, for Claude Code, Codex, and Antig
 - onepassword: read secrets through the op CLI
 - plain-writing: write prose a reader understands on the first pass
 - primer: turn a product idea into a build brief and task files
+- questionnaire: turn a JSON list of decisions into an artifact page the owner answers and pastes back
 - render: Render.com blueprints, SSH, and REST API
 
 ## Agents
