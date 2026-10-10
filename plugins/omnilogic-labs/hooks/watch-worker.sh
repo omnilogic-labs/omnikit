@@ -4,19 +4,19 @@
 #
 # Usage: watch-worker.sh <job dir> [max seconds]
 #
-# Prints a progress line every WATCH_INTERVAL seconds (default 20) while the
-# job runs, then ends with one of:
+# Each call watches for at most max seconds (default WATCH_MAX, else 60), so the
+# agent gets a result, and writes a line to its transcript, about once a minute.
+# It reports only the stream events added since the previous call: the read
+# position is kept in <job dir>/watch.seen. It ends with one of:
 #   DONE exit <code>   the job's exit file appeared; the final message follows
-#   RUNNING ...        max seconds (default 540, under Bash's 10 minute cap)
-#                      passed first; run this again to keep watching
+#   RUNNING ...        max seconds passed first; run this again to keep watching
 #   STALE ...          no exit file well past the job's timeout
 # It exits 0 in every case but a bad job dir; the job's own code is on the
 # DONE line.
 set -e
 
 dir=$1
-max=${2:-540}
-interval=${WATCH_INTERVAL:-20}
+max=${2:-${WATCH_MAX:-60}}
 if [ -z "$dir" ] || [ ! -f "$dir/params" ]; then
   echo "watch-worker: usage: watch-worker.sh <job dir> [max seconds]" >&2
   exit 2
@@ -36,8 +36,10 @@ cut_line() { tr -s '[:space:]' ' ' | cut -c 1-"${1:-160}"; }
 
 mmss() { printf '%02d:%02d' $(($1 / 60)) $(($1 % 60)); }
 
-# Prints what the stream lines after line $seen say, then advances $seen.
-seen=0
+# Prints what the stream lines after the saved position say, then saves the
+# new position.
+seen=$(cat "$dir/watch.seen" 2> /dev/null || echo 0)
+[[ $seen =~ ^[0-9]+$ ]] || seen=0
 report() {
   local stream="$dir/stream.jsonl" total new elapsed
   total=$( (wc -l < "$stream") 2> /dev/null | tr -d ' ' || echo 0)
@@ -48,34 +50,44 @@ report() {
     return
   fi
   new=$(tail -n +"$((seen + 1))" "$stream" | head -n "$((total - seen))")
+  echo "[$elapsed] $engine: $((total - seen)) new events ($total total)"
   seen=$total
-  echo "[$elapsed] $engine: $total events"
+  echo "$seen" > "$dir/watch.seen"
   if [ "$has_jq" -eq 0 ]; then
-    printf '%s\n' "$new" | tail -n 1 | cut_line | sed 's/^/  /'
+    printf '%s\n' "$new" | tail -n 3 | while IFS= read -r l; do printf '  %s\n' "$(printf '%s' "$l" | cut_line)"; done
     return
   fi
   case "$engine" in
     agy)
-      # step_update events carry the reply in small text_delta pieces: join them.
+      # Tool steps as one line each; the reply's text_delta pieces joined.
       printf '%s\n' "$new" \
-        | jq -Rrj 'fromjson? | select(.event == "step_update") | .step_update.text_delta // empty' \
-          2> /dev/null | tr -s '[:space:]' ' ' | tail -c 200 | sed 's/^/  /'
-      echo
+        | jq -Rr 'fromjson? | .step_update // empty | select(.step_type == "tool" and .state == "ACTIVE")
+            | "\(.tool_name): \(.tool_info.parameters // {} | tostring)" | gsub("\\s+"; " ")' 2> /dev/null \
+        | tail -n 8 | while IFS= read -r l; do printf '  %s\n' "$(printf '%s' "$l" | cut_line)"; done
+      local text
+      text=$(printf '%s\n' "$new" \
+        | jq -Rrj 'fromjson? | .step_update // empty | select(.step_type == "agent_response") | .text_delta // empty' \
+          2> /dev/null | tr -s '[:space:]' ' ' | tail -c 300)
+      [ -n "$text" ] && printf '  said: %s\n' "$text"
       ;;
     codex)
       printf '%s\n' "$new" \
-        | jq -Rr 'fromjson? | select(.type == "item.completed")
-            | "\(.item.type): \(.item.text // .item.command // "")"' 2> /dev/null \
-        | tail -n 5 | while IFS= read -r l; do printf '  %s\n' "$(printf '%s' "$l" | cut_line)"; done
+        | jq -Rr 'fromjson? | .item as $i | select($i != null)
+            | if .type == "item.completed" and $i.type == "agent_message" then "said: \($i.text)"
+              elif .type == "item.started" and $i.type == "command_execution" then "ran: \($i.command)"
+              elif .type == "item.completed" and $i.type == "file_change" then "edited: \([$i.changes[]?.path] | join(", "))"
+              elif .type == "item.completed" and ($i.type | test("command_execution|agent_message|reasoning") | not)
+                then "\($i.type): \($i.text // "")"
+              else empty end | gsub("\\s+"; " ")' 2> /dev/null \
+        | tail -n 8 | while IFS= read -r l; do printf '  %s\n' "$(printf '%s' "$l" | cut_line 200)"; done
       ;;
     *)
-      printf '%s\n' "$new" | tail -n 1 | cut_line | sed 's/^/  /'
+      printf '%s\n' "$new" | tail -n 3 | while IFS= read -r l; do printf '  %s\n' "$(printf '%s' "$l" | cut_line)"; done
       ;;
   esac
 }
 
 begin=$SECONDS
-last=$SECONDS
 while true; do
   if [ -f "$dir/exit" ]; then
     report
@@ -92,12 +104,8 @@ while true; do
   fi
   if [ $((SECONDS - begin)) -ge "$max" ]; then
     report
-    echo "RUNNING after $(mmss $((SECONDS - begin))) of watching; run this command again to keep watching"
+    echo "RUNNING: write one line on what the worker is doing, then run this command again"
     exit 0
-  fi
-  if [ $((SECONDS - last)) -ge "$interval" ]; then
-    report
-    last=$SECONDS
   fi
   sleep 1
 done

@@ -442,8 +442,9 @@ export const register: Register = (on) => {
     return {
       result:
         `Started ${engine} job ${id} as background task ${taskId ?? "(none)"} in ${cwd}. ` +
-        `Output dir: ${dir}.${await staleWarning($)} Now run the Watch command with Bash, again ` +
-        `after each RUNNING, and reply only once it prints DONE or STALE. ` +
+        `Output dir: ${dir}.${await staleWarning($)} Now run the Watch command with Bash. It returns ` +
+        `about once a minute: after each RUNNING, write one or two sentences on what the worker is doing, ` +
+        `then run it again; reply only once it prints DONE or STALE. ` +
         `Watch: ${watchCommand($.plugin.root, dir)}`,
     };
   }).catch(() => ({
