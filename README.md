@@ -9,6 +9,7 @@ One plugin, `omnilogic-labs`, carries every skill and agent. In Claude Code they
 - `agent-browser`: drive Vercel's [agent-browser](https://github.com/vercel-labs/agent-browser) CLI
 - `artistic-vision`: Gemini image generation and editing, Sharp local processing
 - `coordinator`: run multi-step work through planner, builder, and verifier agents
+- `inbox`: one live page where every Claude session posts what it needs from the owner
 - `onepassword`: read secrets through the `op` CLI
 - `plain-writing`: write prose a reader understands on the first pass
 - `primer`: turn a product idea into a build brief and task files

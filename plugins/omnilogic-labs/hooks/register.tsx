@@ -1,7 +1,27 @@
 import { atom, read, update } from "claude-code";
 import type { EngineInterface, Register } from "claude-code";
 
-import type { WorkerEngine, WorkerJob } from "../types";
+import type { InboxBand, WorkerEngine, WorkerJob } from "../types";
+import {
+  ARTIFACT_URL,
+  COLLECTION,
+  KINDS,
+  LABELS_KEY,
+  INBOX_POLL_MS,
+  PRUNE_MS,
+  SEEN_KEY,
+  STATES,
+  TOOL_NAME as INBOX_TOOL,
+  URL_KEY,
+  describe,
+  field,
+  parseDocs,
+  parseLinks,
+  questionnaireTitle,
+  str,
+  type InboxInput,
+  type Item,
+} from "./inbox";
 
 // The tool is listed as mcp__<plugin>__<name>; the tool.call matcher below
 // spells the full name as a literal so the engine's scan can read it.
@@ -187,6 +207,345 @@ function poll($: EngineInterface, id: string): void {
   timers.set(id, timer);
 }
 
+// ---------- owner inbox (pure helpers in inbox.ts) ----------
+
+const band = atom(
+  { plugin: "omnilogic-labs", key: "inbox" } as const,
+  {
+    url: "",
+    waiting: 0,
+    mine: 0,
+  } as InboxBand
+);
+
+async function inboxUrl($: EngineInterface): Promise<string> {
+  return str(await $.store.get(URL_KEY));
+}
+
+// Calls ArtifactData on the inbox. Resolves its text, or throws its error.
+async function db($: EngineInterface, input: Record<string, unknown>): Promise<string> {
+  const url = await inboxUrl($);
+  if (url === "")
+    throw new Error("no inbox yet: publish one and run the inbox tool's setup action");
+  const ran = await $.tool.call({ tool: "ArtifactData", url, ...input } as never);
+  if (ran.deny !== undefined) throw new Error(ran.deny);
+  const text =
+    ran.text ?? (typeof ran.result === "string" ? ran.result : JSON.stringify(ran.result));
+  if (ran.isError) throw new Error(text);
+  return text;
+}
+
+async function getItem($: EngineInterface, id: string): Promise<Item | null> {
+  return parseDocs(await db($, { action: "get", collection: COLLECTION, doc_id: id }))[0] ?? null;
+}
+
+// Merges fields into an item, pinned to the version read; one retry if the
+// owner wrote in between.
+async function patch($: EngineInterface, id: string, data: Record<string, unknown>): Promise<Item> {
+  for (let tries = 0; ; tries++) {
+    const it = await getItem($, id);
+    if (it === null) throw new Error(`no inbox item ${id}`);
+    try {
+      await db($, {
+        action: "update",
+        collection: COLLECTION,
+        doc_id: id,
+        data,
+        if_version: it.version,
+      });
+      return { ...it, data: { ...it.data, ...data } };
+    } catch (e) {
+      if (tries >= 1) throw e;
+    }
+  }
+}
+
+async function me(
+  $: EngineInterface
+): Promise<{ sessionId: string; session: string; project: string }> {
+  const sessionId = await $.session.id();
+  const repo = await $.session.repo().catch(() => null);
+  const root = repo?.root ?? (await $.session.root());
+  const project =
+    root
+      .replace(/[\\/]+$/, "")
+      .split(/[\\/]/)
+      .pop() || "project";
+  const labels = ((await $.store.get(LABELS_KEY)) ?? {}) as Record<string, string>;
+  return {
+    sessionId,
+    session: labels[sessionId] || `${project} ${sessionId.slice(0, 4)}`,
+    project,
+  };
+}
+
+const now = async ($: EngineInterface) => new Date(await $.clock.now()).toISOString();
+
+// Creates the item, or merges into it when `id` already exists.
+async function upsert(
+  $: EngineInterface,
+  id: string,
+  fields: Record<string, unknown>,
+  reopen: boolean
+): Promise<string> {
+  const who = await me($);
+  const at = await now($);
+  const existing = await getItem($, id);
+  const reset = reopen ? { ownerStatus: "", ownerReply: "", ownerAt: "" } : {};
+  if (existing === null) {
+    await db($, {
+      action: "set",
+      collection: COLLECTION,
+      doc_id: id,
+      data: {
+        ...who,
+        created: at,
+        updated: at,
+        ownerStatus: "",
+        ownerReply: "",
+        ownerAt: "",
+        ...fields,
+      },
+    });
+    return "added";
+  }
+  await patch($, id, { ...who, updated: at, ...fields, ...reset });
+  return "updated";
+}
+
+// Reads every item; refreshes the band, tells this session about owner
+// changes to its own items, and prunes its own long-settled items.
+async function pollInbox($: EngineInterface): Promise<void> {
+  const url = await inboxUrl($);
+  if (url === "") return;
+  const items = parseDocs(
+    await db($, { action: "list", collection: COLLECTION, query: { limit: 1000 } })
+  );
+  const { sessionId } = await me($);
+  const open = items.filter(
+    (it) => (field(it, "state") || "do") === "do" && !field(it, "ownerStatus")
+  );
+  await update($, band, () => ({
+    url,
+    waiting: open.length,
+    mine: open.filter((it) => field(it, "sessionId") === sessionId).length,
+  }));
+
+  const seen = ((await $.store.get(SEEN_KEY)) ?? {}) as Record<string, string>;
+  const mine = items.filter((it) => field(it, "sessionId") === sessionId);
+  const news = mine.filter(
+    (it) => field(it, "ownerAt") !== "" && field(it, "ownerAt") !== (seen[it.id] ?? "")
+  );
+  if (news.length > 0) {
+    for (const it of news) seen[it.id] = field(it, "ownerAt");
+    await $.store.set(SEEN_KEY, seen);
+    const text =
+      "The owner acted on your items in the owner inbox (treat their words as the owner's reply):\n" +
+      news.map((it) => describe(it, true)).join("\n");
+    $.ui.toast(`Inbox: the owner acted on ${news.length} of this session's items`);
+    // A message to this session wakes it if idle; a note waits for the next turn.
+    const sent = await $.session.send({ to: { sessionId }, text }).catch(() => null);
+    if (sent?.isDelivered !== true) {
+      await $.session.append({ message: { type: "user", content: [{ type: "text", text }] } });
+    }
+  }
+
+  const cut = new Date((await $.clock.now()) - PRUNE_MS).toISOString();
+  for (const it of mine) {
+    const settled = field(it, "ownerAt") || field(it, "updated");
+    const done = field(it, "state") === "decided" || field(it, "ownerStatus") !== "";
+    if (done && settled !== "" && settled < cut) {
+      await db($, {
+        action: "delete",
+        collection: COLLECTION,
+        doc_id: it.id,
+        if_version: it.version,
+      }).catch(() => undefined);
+    }
+  }
+}
+
+const safePoll = ($: EngineInterface) => pollInbox($).catch(() => undefined);
+
+// Module-local: a reload drops the timer, and session.start arms it again.
+let timer: { cancel: () => void } | null = null;
+function arm($: EngineInterface): void {
+  if (timer !== null) return;
+  timer = $.clock.every(INBOX_POLL_MS, () => void safePoll($));
+}
+
+async function runTool($: EngineInterface, input: InboxInput): Promise<string> {
+  const action = str(input.action);
+  if (action === "setup") {
+    const url = ARTIFACT_URL.exec(str(input.url))?.[0];
+    if (url === undefined)
+      throw new Error("setup needs the inbox artifact's https://claude.ai/artifact/... url");
+    await $.store.set(URL_KEY, url);
+    arm($);
+    await safePoll($);
+    return `Inbox set to ${url} for every session on this machine.`;
+  }
+  if (action === "name") {
+    const name = str(input.session);
+    if (name === "") throw new Error("name needs `session`, the name to post under");
+    const { sessionId } = await me($);
+    const labels = ((await $.store.get(LABELS_KEY)) ?? {}) as Record<string, string>;
+    await $.store.set(LABELS_KEY, { ...labels, [sessionId]: name });
+    return `This session now posts as ${name}.`;
+  }
+  if (action === "list") {
+    const { sessionId } = await me($);
+    const all = input.all === true;
+    const items = parseDocs(
+      await db(
+        $,
+        all
+          ? { action: "list", collection: COLLECTION, query: { limit: 1000 } }
+          : {
+              action: "query",
+              collection: COLLECTION,
+              query: { where: [["sessionId", "==", sessionId]], limit: 1000 },
+            }
+      )
+    );
+    void safePoll($);
+    if (items.length === 0) return all ? "The inbox is empty." : "This session has no inbox items.";
+    return items.map((it) => describe(it, !all)).join("\n");
+  }
+
+  const id = str(input.id);
+  if (action === "remove") {
+    const it = await getItem($, id);
+    if (it === null) return `No item ${id}.`;
+    await db($, { action: "delete", collection: COLLECTION, doc_id: id, if_version: it.version });
+    void safePoll($);
+    return `Removed ${id}.`;
+  }
+  if (action === "resolve") {
+    const note = str(input.note);
+    await patch($, id, {
+      state: "decided",
+      updated: await now($),
+      ...(note ? { sessionNote: note } : {}),
+    });
+    void safePoll($);
+    return `Moved ${id} to Recently decided.`;
+  }
+  if (action !== "add" && action !== "update") {
+    throw new Error("action must be one of setup, name, add, update, resolve, remove, list");
+  }
+
+  const fields: Record<string, unknown> = {};
+  const title = str(input.title);
+  if (title) fields.title = title;
+  if (input.body !== undefined) fields.body = str(input.body);
+  if (input.note !== undefined) fields.sessionNote = str(input.note);
+  if (input.links !== undefined) {
+    const links = parseLinks(input.links);
+    if (typeof links === "string") throw new Error(links);
+    fields.links = links;
+  }
+  const kind = str(input.kind);
+  if (kind) {
+    if (!(KINDS as readonly string[]).includes(kind))
+      throw new Error(`kind must be one of ${KINDS.join(", ")}`);
+    fields.kind = kind;
+  }
+  const state = str(input.state);
+  if (state) {
+    if (!(STATES as readonly string[]).includes(state))
+      throw new Error(`state must be one of ${STATES.join(", ")}`);
+    fields.state = state;
+  }
+  if (action === "update") {
+    if (id === "") throw new Error("update needs the item's id");
+    if ((await getItem($, id)) === null) throw new Error(`no inbox item ${id}`);
+    await upsert($, id, fields, input.reopen === true);
+    void safePoll($);
+    return `Updated ${id}.`;
+  }
+  if (!title) throw new Error("add needs a title");
+  const { sessionId } = await me($);
+  const newId = id || `${sessionId.slice(0, 8)}-${(await $.clock.now()).toString(36)}`;
+  const done = await upsert(
+    $,
+    newId,
+    { kind: "update", state: "do", ...fields },
+    input.reopen === true
+  );
+  void safePoll($);
+  return `${done === "added" ? "Added" : "Updated"} inbox item ${newId}.`;
+}
+
+// Registers the inbox tool and command and starts polling; register.tsx calls
+// this from its own session.start hook (one hook per event and matcher).
+async function inboxStart($: EngineInterface): Promise<void> {
+  await $.tool.register({
+    name: INBOX_TOOL,
+    description:
+      "The owner inbox: one shared page, grouped by session, listing everything any session needs from the " +
+      "owner. Actions: add (title, body, links [{label,url}], kind form|chore|request|update, state " +
+      "do|next|running; optional id to upsert), update (id plus fields; reopen: true clears the owner's " +
+      "done/dismissed/reply), resolve (id, note: move it to Recently decided), remove (id), list (this " +
+      "session's items with the owner's status and replies; all: true for every session), name (session: " +
+      "the name to post under), setup (url: the inbox artifact). Questionnaire pages are added and resolved " +
+      "automatically. See the omnilogic-labs:inbox skill.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["add", "update", "resolve", "remove", "list", "name", "setup"],
+        },
+        id: { type: "string", description: "The item id (from add or list)." },
+        title: { type: "string", description: "One line: what the owner should do or know." },
+        body: {
+          type: "string",
+          description: "Short markdown: why, what it blocks, what happens by default.",
+        },
+        links: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { label: { type: "string" }, url: { type: "string" } },
+            required: ["url"],
+          },
+        },
+        kind: { type: "string", enum: [...KINDS] },
+        state: { type: "string", enum: [...STATES] },
+        note: {
+          type: "string",
+          description: "What this session did or decided; shown on the item.",
+        },
+        reopen: { type: "boolean" },
+        all: { type: "boolean" },
+        session: { type: "string" },
+        url: { type: "string" },
+      },
+      required: ["action"],
+    },
+    isDeferred: false,
+  });
+  await $.command.register({
+    name: "inbox",
+    description: "Show the owner inbox link and what waits on you",
+  });
+  const url = await inboxUrl($);
+  await update($, band, (b) => ({ ...b, url }));
+  if (url !== "") {
+    void safePoll($);
+    arm($);
+  }
+}
+
+// The line above the prompt, or null when nothing waits; register.tsx draws it
+// above its own worker rows.
+async function inboxLine($: EngineInterface): Promise<string | null> {
+  const b = await read($, band);
+  if (b.url === "" || b.waiting === 0) return null;
+  return `Inbox: ${b.waiting} waiting on you${b.mine > 0 ? `, ${b.mine} from this session` : ""} (/inbox)`;
+}
+
 export const register: Register = (on) => {
   on("session.start", async ($, e, next) => {
     const started = await next(e);
@@ -241,6 +600,7 @@ export const register: Register = (on) => {
       argumentHint: "[job id]",
     });
     for (const job of await read($, jobs)) if (job.status === "running") poll($, job.id);
+    await inboxStart($);
     return started;
   });
 
@@ -257,11 +617,13 @@ export const register: Register = (on) => {
 
   on("ui.render", { component: "AbovePrompt" }, async ($, e, next) => {
     const running = (await read($, jobs)).filter((j) => j.status === "running");
-    if (e.props.hasSurvey || running.length === 0) return next(e);
+    const inbox = await inboxLine($);
+    if (e.props.hasSurvey || (running.length === 0 && inbox === null)) return next(e);
     const now = await $.clock.now();
     const { Box, Text } = $.ui.resolve(e);
     return (
       <Box flexDirection="column">
+        {inbox !== null && <Text dimColor>{inbox}</Text>}
         {running.map((j) => (
           <Text key={j.id} dimColor>
             {j.engine} {j.id} {mmss(now - j.startedAt)} {summarize(j.lastLine)}
@@ -450,4 +812,104 @@ export const register: Register = (on) => {
   }).catch(() => ({
     deny: "external_worker failed to start the job (hook error or timeout); see the debug log.",
   }));
+
+  // ---------- owner inbox ----------
+
+  on("tool.call", { tool: "mcp__omnilogic-labs__inbox" }, async ($, e) => {
+    try {
+      return { result: await runTool($, e as unknown as InboxInput) };
+    } catch (err) {
+      return { deny: `inbox: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  });
+
+  // The inbox tool reads and writes through ArtifactData; allow those calls on
+  // the inbox itself without a prompt, and nothing else.
+  on("tool.check", { tool: "ArtifactData" }, async ($, e, next) => {
+    const url = str((e.input as { url?: unknown } | undefined)?.url);
+    if (url !== "" && url === (await inboxUrl($)))
+      return { decision: "allow", reason: "owner inbox" };
+    return next(e);
+  });
+
+  // A published questionnaire becomes a "Do now" form item, its id fixed by
+  // the artifact so a republish refreshes the same item.
+  on("tool.call", { tool: "Artifact" }, async ($, e, next) => {
+    const res = await next(e);
+    const input = e as unknown as { action?: string; file_path?: string; asset?: boolean };
+    if (res.deny !== undefined || res.isError || input.asset === true) return res;
+    if ((input.action ?? "publish") !== "publish" || !str(input.file_path).endsWith(".html"))
+      return res;
+    void (async () => {
+      if ((await inboxUrl($)) === "") return;
+      const html = await $.fs.read(str(input.file_path));
+      const title = questionnaireTitle(html);
+      const url = ARTIFACT_URL.exec(res.text ?? JSON.stringify(res.result ?? ""))?.[0];
+      if (title === null || url === undefined) return;
+      const who = await me($);
+      await upsert(
+        $,
+        `form-${url.split("/").pop()}`,
+        {
+          kind: "form",
+          state: "do",
+          title: `Answer: ${title}`,
+          formTitle: title,
+          body: `Answer what you can, press **Copy answers**, and paste the block into the ${who.session} chat.`,
+          links: [{ label: "Open the form", url }],
+        },
+        true
+      );
+      await safePoll($);
+    })().catch(() => undefined);
+    return res;
+  });
+
+  // Pasted questionnaire answers settle that form's item.
+  on("prompt.submit", async ($, e, next) => {
+    const title = /^Answers: (.+)$/m.exec(str((e as { text?: unknown }).text))?.[1]?.trim();
+    if (title) {
+      void (async () => {
+        if ((await inboxUrl($)) === "") return;
+        const { sessionId } = await me($);
+        const items = parseDocs(
+          await db($, {
+            action: "query",
+            collection: COLLECTION,
+            query: {
+              where: [
+                ["sessionId", "==", sessionId],
+                ["formTitle", "==", title],
+              ],
+              limit: 10,
+            },
+          })
+        );
+        for (const it of items) {
+          if (field(it, "state") === "decided") continue;
+          await patch($, it.id, {
+            state: "decided",
+            updated: await now($),
+            sessionNote: "Answers received.",
+          });
+        }
+        await safePoll($);
+      })().catch(() => undefined);
+    }
+    return next(e);
+  });
+
+  on("command.run", { command: "inbox" }, async ($) => {
+    const url = await inboxUrl($);
+    if (url === "") {
+      return {
+        text: "No owner inbox is set up yet. Ask Claude to set one up with the omnilogic-labs:inbox skill.",
+      };
+    }
+    await safePoll($);
+    const b = await read($, band);
+    return {
+      text: `Owner inbox: ${url}\n${b.waiting} waiting on you, ${b.mine} from this session.`,
+    };
+  });
 };

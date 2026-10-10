@@ -1,0 +1,314 @@
+<title>Owner Inbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+/>
+<style>
+  /* Layout: one column. "Do now" first, then coming, running, decided; inside each, one block per asking session. */
+  :root {
+    --bg: #eef1f6;
+    --surface: #ffffff;
+    --fg: #172033;
+    --muted: #5a6478;
+    --line: #d5dbe6;
+    --accent: #2b4ea2;
+    --accent-soft: #e2e9f8;
+    --due: #b4561c;
+    --due-soft: #fbeadf;
+    --ok: #2d6b47;
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10141c; --surface: #181e2a; --fg: #e3e8f1; --muted: #98a2b6; --line: #2a3242;
+      --accent: #8aa8ef; --accent-soft: #1d2840; --due: #ec9a62; --due-soft: #3a2619; --ok: #79c69a;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10141c; --surface: #181e2a; --fg: #e3e8f1; --muted: #98a2b6; --line: #2a3242;
+    --accent: #8aa8ef; --accent-soft: #1d2840; --due: #ec9a62; --due-soft: #3a2619; --ok: #79c69a;
+    color-scheme: dark;
+  }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--body); padding-inline: 16px; padding-block: 28px 56px; }
+  main { max-width: 46rem; margin: 0 auto; display: grid; gap: 2rem; }
+  h1, h2, h3 { margin: 0; text-wrap: balance; }
+  h1 { font: 600 2rem/1.1 var(--display); }
+  h2 { font: 600 1.2rem/1.3 var(--display); display: flex; align-items: baseline; gap: 0.5rem; }
+  h2 .n { font: 500 0.8rem var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  p { margin: 0 0 0.4rem; }
+  p:last-child { margin-bottom: 0; }
+  ul, ol { margin: 0 0 0.4rem; padding-left: 1.2rem; }
+  a { color: var(--accent); font-weight: 600; }
+  code { font: 0.85em var(--mono); background: var(--accent-soft); padding: 0 0.3em; border-radius: 3px; overflow-wrap: anywhere; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .head { display: grid; gap: 0.4rem; }
+  .sub { color: var(--muted); max-width: 60ch; }
+  .meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font: 500 0.78rem var(--mono); color: var(--muted); }
+  .live::before { content: ""; display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--ok); margin-right: 0.4rem; vertical-align: 0.05rem; }
+  .live.is-off::before { background: var(--muted); }
+  section { display: grid; gap: 0.9rem; }
+  .groups { display: grid; gap: 1.5rem; }
+  .group { display: grid; gap: 0.6rem; }
+  .who { font: 500 0.78rem/1.3 var(--mono); color: var(--muted); display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; }
+  .who b { color: var(--fg); font-weight: 500; }
+  .item { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 0.9rem 1rem; display: grid; gap: 0.5rem; min-width: 0; }
+  .do .item { border-left: 4px solid var(--due); }
+  .item-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 0.6rem; }
+  .item h3 { font: 600 1rem/1.35 var(--body); flex: 1 1 16rem; min-width: 0; }
+  .kind { font: 500 0.7rem/1.6 var(--mono); letter-spacing: 0.05em; text-transform: uppercase; padding: 0 0.45rem; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+  .kind-form { background: var(--due-soft); color: var(--due); }
+  .age { font: 0.75rem var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .body { min-width: 0; overflow-wrap: anywhere; }
+  .quiet .item { background: transparent; }
+  .quiet .body, .quiet h3 { color: var(--muted); }
+  .quiet h3 { font-weight: 500; }
+  .links { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .links a { display: inline-block; padding: 0.35rem 0.75rem; border-radius: 4px; background: var(--accent); color: var(--surface); text-decoration: none; font-size: 0.875rem; }
+  .links a.plain { background: transparent; color: var(--accent); padding-inline: 0; text-decoration: underline; }
+  .acts { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  button { font: 500 0.85rem var(--body); padding: 0.35rem 0.75rem; border-radius: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .reply { display: grid; gap: 0.4rem; }
+  textarea { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0.45rem 0.55rem; width: 100%; box-sizing: border-box; resize: vertical; min-height: 4.5rem; }
+  .said { font-size: 0.875rem; border-left: 2px solid var(--accent); padding-left: 0.6rem; color: var(--fg); }
+  .said span { font: 0.72rem var(--mono); color: var(--muted); display: block; }
+  .outcome { font: 500 0.75rem var(--mono); color: var(--ok); }
+  .empty { color: var(--muted); padding: 0.9rem 1rem; border: 1px dashed var(--line); border-radius: 6px; }
+  .err { color: var(--due); font-size: 0.875rem; }
+  @media (prefers-reduced-motion: no-preference) { .item { transition: border-color 0.15s; } }
+</style>
+
+<main>
+  <header class="head">
+    <h1>What your sessions need from you</h1>
+    <p class="sub">
+      Every Claude session posts here when it needs you. Answer the forms, do the chores, and mark
+      each one done. Write a reply when the session needs more than a tick.
+    </p>
+    <div class="meta">
+      <span class="live is-off" id="live">Connecting</span>
+      <span id="count"></span>
+    </div>
+  </header>
+  <p class="err" id="err" hidden></p>
+  <section class="do" aria-labelledby="h-do">
+    <h2 id="h-do">Do now <span class="n" id="n-do"></span></h2>
+    <div class="groups" id="s-do"><p class="empty">Nothing is waiting on you.</p></div>
+  </section>
+  <section aria-labelledby="h-next">
+    <h2 id="h-next">Coming to you next <span class="n" id="n-next"></span></h2>
+    <div class="groups" id="s-next"><p class="empty">Nothing is on its way.</p></div>
+  </section>
+  <section class="quiet" aria-labelledby="h-running">
+    <h2 id="h-running">Running now <span class="n" id="n-running"></span></h2>
+    <div class="groups" id="s-running">
+      <p class="empty">No session has reported work in progress.</p>
+    </div>
+  </section>
+  <section class="quiet" aria-labelledby="h-decided">
+    <h2 id="h-decided">Recently decided <span class="n" id="n-decided"></span></h2>
+    <div class="groups" id="s-decided">
+      <p class="empty">Nothing decided in the last two weeks.</p>
+    </div>
+  </section>
+</main>
+
+<script>
+  (function () {
+    "use strict";
+    // Each document in "items" is one thing a session wants the owner to see.
+    // Sessions write it through the inbox tool; this page writes only the
+    // owner's fields: ownerStatus ("done", "dismissed" or ""), ownerReply, ownerAt.
+    var SECTIONS = ["do", "next", "running", "decided"];
+    var RECENT_MS = 14 * 24 * 3600 * 1000;
+    var items = [];
+    var db = null;
+    var drafts = {}; // reply text being typed, by item id, kept across renders
+
+    function esc(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+    function inline(s) {
+      return esc(s)
+        .replace(/`([^`]+)`/g, "<code>$1</code>")
+        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+        .replace(/\[([^\]]+)\]\((https:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    }
+    // Paragraphs and "- " lists, with inline code, bold and https links.
+    function md(src) {
+      if (!src) return "";
+      return String(src).replace(/\r\n/g, "\n").split(/\n{2,}/).map(function (block) {
+        var lines = block.split("\n");
+        if (lines.every(function (l) { return /^\s*[-*] /.test(l); })) {
+          return "<ul>" + lines.map(function (l) { return "<li>" + inline(l.replace(/^\s*[-*] /, "")) + "</li>"; }).join("") + "</ul>";
+        }
+        return "<p>" + lines.map(inline).join("<br>") + "</p>";
+      }).join("");
+    }
+    function ago(iso) {
+      var t = Date.parse(iso || "");
+      if (!isFinite(t)) return "";
+      var m = Math.max(0, Math.round((Date.now() - t) / 60000));
+      if (m < 1) return "just now";
+      if (m < 60) return m + " min ago";
+      var h = Math.round(m / 60);
+      if (h < 36) return h + " h ago";
+      return Math.round(h / 24) + " days ago";
+    }
+    function section(it) {
+      if (it.ownerStatus === "done" || it.ownerStatus === "dismissed") return "decided";
+      return SECTIONS.indexOf(it.state) === -1 ? "do" : it.state;
+    }
+    function stamp(it) {
+      return it.ownerAt && section(it) === "decided" && it.ownerAt > (it.updated || "") ? it.ownerAt : it.updated || it.created || "";
+    }
+
+    function card(it) {
+      var sec = section(it);
+      var h = '<article class="item" data-id="' + esc(it.id) + '">';
+      h += '<div class="item-top"><span class="kind kind-' + esc(it.kind || "update") + '">' + esc(it.kind || "update") + "</span>";
+      h += "<h3>" + esc(it.title || "(untitled)") + "</h3>";
+      h += '<span class="age">' + esc(ago(stamp(it))) + "</span></div>";
+      if (it.body) h += '<div class="body">' + md(it.body) + "</div>";
+      var links = Array.isArray(it.links) ? it.links.filter(function (l) { return l && /^https:\/\//.test(l.url || ""); }) : [];
+      if (links.length) {
+        h += '<div class="links">' + links.map(function (l, i) {
+          return '<a href="' + esc(l.url) + '" target="_blank" rel="noopener"' + (sec === "do" && i === 0 ? "" : ' class="plain"') + ">" + esc(l.label || "Open") + "</a>";
+        }).join("") + "</div>";
+      }
+      if (it.ownerReply) h += '<p class="said"><span>You replied ' + esc(ago(it.ownerAt)) + "</span>" + esc(it.ownerReply) + "</p>";
+      if (it.sessionNote) h += '<p class="said"><span>The session said</span>' + esc(it.sessionNote) + "</p>";
+      if (sec === "decided") {
+        var why = it.ownerStatus === "done" ? "You marked this done" : it.ownerStatus === "dismissed" ? "You dismissed this" : "Settled by the session";
+        h += '<div class="acts"><span class="outcome">' + why + "</span>";
+        if (it.ownerStatus) h += '<button type="button" data-act="undo">Undo</button>';
+        h += "</div>";
+      } else if (sec === "do" || sec === "next") {
+        h += '<div class="acts">';
+        if (sec === "do") h += '<button type="button" data-act="done">Mark done</button>';
+        h += '<button type="button" data-act="reply-open">Reply</button>';
+        h += '<button type="button" data-act="dismiss">Dismiss</button></div>';
+        if (drafts[it.id] !== undefined) {
+          h += '<div class="reply"><label for="r-' + esc(it.id) + '">Reply to ' + esc(it.session || "the session") + "</label>";
+          h += '<textarea id="r-' + esc(it.id) + '" data-id="' + esc(it.id) + '">' + esc(drafts[it.id]) + "</textarea>";
+          h += '<div class="acts"><button type="button" data-act="reply-send">Send reply</button><button type="button" data-act="reply-cancel">Cancel</button></div></div>';
+        }
+      }
+      return h + "</article>";
+    }
+
+    function render() {
+      var cut = new Date(Date.now() - RECENT_MS).toISOString();
+      var by = { do: [], next: [], running: [], decided: [] };
+      items.forEach(function (it) {
+        var sec = section(it);
+        if (sec === "decided" && stamp(it) < cut) return;
+        by[sec].push(it);
+      });
+      SECTIONS.forEach(function (sec) {
+        var list = by[sec].sort(function (a, b) {
+          return sec === "decided" ? (stamp(b) > stamp(a) ? 1 : -1) : (stamp(a) > stamp(b) ? 1 : -1);
+        });
+        document.getElementById("n-" + sec).textContent = list.length ? String(list.length) : "";
+        var root = document.getElementById("s-" + sec);
+        if (!list.length) {
+          root.innerHTML = '<p class="empty">' + esc(root.dataset.empty || root.textContent) + "</p>";
+          return;
+        }
+        // One block per asking session, in order of its first item.
+        var order = [];
+        var groups = {};
+        list.forEach(function (it) {
+          var k = (it.project || "") + "\u0000" + (it.session || "");
+          if (!groups[k]) { groups[k] = []; order.push(k); }
+          groups[k].push(it);
+        });
+        root.innerHTML = order.map(function (k) {
+          var g = groups[k];
+          var who = '<div class="who"><b>' + esc(g[0].session || "a session") + "</b>" + (g[0].project ? "<span>in " + esc(g[0].project) + "</span>" : "") + "</div>";
+          return '<div class="group">' + who + g.map(card).join("") + "</div>";
+        }).join("");
+      });
+      var waiting = by.do.length;
+      document.getElementById("count").textContent = waiting === 0 ? "Nothing waiting" : waiting + (waiting === 1 ? " thing waits" : " things wait") + " on you";
+    }
+
+    // Remember each section's empty text before the first render replaces it.
+    SECTIONS.forEach(function (sec) {
+      var root = document.getElementById("s-" + sec);
+      root.dataset.empty = root.textContent.trim();
+    });
+
+    function fail(msg) {
+      var el = document.getElementById("err");
+      el.textContent = msg;
+      el.hidden = !msg;
+    }
+
+    function write(id, data, btn) {
+      if (!db) return;
+      if (btn) btn.disabled = true;
+      data.ownerAt = new Date().toISOString();
+      db.collection("items").doc(id).update(data).then(function () { fail(""); }, function (e) {
+        if (btn) btn.disabled = false;
+        fail(e && e.code === "invalid_argument"
+          ? "You can view this inbox but not change it. Ask its owner for Contributor access."
+          : "That change did not save. Try again in a moment.");
+      });
+    }
+
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest && e.target.closest("button[data-act]");
+      if (!btn) return;
+      var id = btn.closest(".item").dataset.id;
+      var act = btn.dataset.act;
+      if (act === "done") write(id, { ownerStatus: "done" }, btn);
+      else if (act === "dismiss") write(id, { ownerStatus: "dismissed" }, btn);
+      else if (act === "undo") write(id, { ownerStatus: "" }, btn);
+      else if (act === "reply-open") { if (drafts[id] === undefined) drafts[id] = ""; render(); var t = document.getElementById("r-" + id); if (t) t.focus(); }
+      else if (act === "reply-cancel") { delete drafts[id]; render(); }
+      else if (act === "reply-send") {
+        var text = (drafts[id] || "").trim();
+        if (!text) return;
+        delete drafts[id];
+        write(id, { ownerReply: text }, btn);
+      }
+    });
+    document.addEventListener("input", function (e) {
+      if (e.target.matches && e.target.matches("textarea[data-id]")) drafts[e.target.dataset.id] = e.target.value;
+    });
+
+    render();
+    // Ages drift; re-render once a minute unless a reply is being typed.
+    setInterval(function () { if (!document.querySelector("textarea:focus")) render(); }, 60000);
+
+    var live = document.getElementById("live");
+    if (!window.claude || typeof window.claude.use !== "function") {
+      live.textContent = "Offline copy: open the inbox on claude.ai";
+      return;
+    }
+    window.claude.use("db").then(function (store) {
+      if (!store) {
+        live.textContent = "Sign in on claude.ai to load the inbox";
+        return;
+      }
+      db = store;
+      db.collection("items").onSnapshot(function (snap) {
+        items = snap.docs.map(function (d) { var v = Object.assign({}, d.data()); v.id = d.id; return v; });
+        live.textContent = "Live";
+        live.classList.remove("is-off");
+        if (!document.querySelector("textarea:focus")) render();
+      }, function () {
+        live.textContent = "Disconnected: reload the page";
+        live.classList.add("is-off");
+      });
+    });
+  })();
+</script>

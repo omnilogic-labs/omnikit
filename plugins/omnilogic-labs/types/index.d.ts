@@ -20,8 +20,17 @@ export type WorkerJob = {
   endedAt: number | null;
 };
 
+// What the band above the prompt shows about the owner inbox.
+export type InboxBand = {
+  url: string;
+  // Items in "Do now" that the owner has not marked done or dismissed.
+  waiting: number;
+  // How many of those this session posted.
+  mine: number;
+};
+
 declare module "claude-code" {
   interface PluginState {
-    "omnilogic-labs": { jobs: WorkerJob[] };
+    "omnilogic-labs": { jobs: WorkerJob[]; inbox: InboxBand };
   }
 }

@@ -17,6 +17,7 @@ Cross-platform agent skills by Omnilogic Labs, for Claude Code, Codex, and Antig
 - agent-browser: drive the agent-browser CLI
 - artistic-vision: Gemini image generation and editing, Sharp processing
 - coordinator: run multi-step work through planner, builder, and verifier agents
+- inbox: one owner inbox page every Claude session posts to through the plugin's inbox tool
 - onepassword: read secrets through the op CLI
 - plain-writing: write prose a reader understands on the first pass
 - primer: turn a product idea into a build brief and task files

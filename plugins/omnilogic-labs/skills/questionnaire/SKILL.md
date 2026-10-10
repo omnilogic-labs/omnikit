@@ -42,7 +42,7 @@ Then show the page to the owner:
   passed as is. Without `files` the images are missing from the published page. Pass `icon: "checklist"` and a one-sentence `description`. The out dir must be under the working
   directory or the scratchpad. The page already meets the artifact page contract, so do not edit it.
 - Give the owner the link. To revise the questions, edit the spec, rebuild into the same out dir, and publish the
-  same path again.
+  same path again. When an owner inbox is set up (omnilogic-labs:inbox), the publish also adds the form to it.
 
 Say what you need back: "Answer what you can, then press Copy answers and paste the block here."
 
