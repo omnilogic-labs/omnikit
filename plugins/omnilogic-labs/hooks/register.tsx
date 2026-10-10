@@ -823,13 +823,18 @@ export const register: Register = (on) => {
     }
   });
 
-  // The inbox tool reads and writes through ArtifactData; allow those calls on
-  // the inbox itself without a prompt, and nothing else.
+  // The inbox tool reads and writes through ArtifactData; on the inbox itself,
+  // turn the engine's "ask" into an allow, and leave every other call alone.
+  // The engine's own check must run first: it records the approval that a
+  // pinned write (update or delete with if_version) needs, so answering
+  // without next(e) makes every such write fail.
   on("tool.check", { tool: "ArtifactData" }, async ($, e, next) => {
+    const decided = await next(e);
     const url = str((e.input as { url?: unknown } | undefined)?.url);
-    if (url !== "" && url === (await inboxUrl($)))
-      return { decision: "allow", reason: "owner inbox" };
-    return next(e);
+    if (decided.decision === "ask" && url !== "" && url === (await inboxUrl($))) {
+      return { ...decided, decision: "allow", reason: "owner inbox" };
+    }
+    return decided;
   });
 
   // A published questionnaire becomes a "Do now" form item, its id fixed by

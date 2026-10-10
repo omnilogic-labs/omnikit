@@ -1,5 +1,6 @@
 import { expect, mock, test } from "claude-code/testing";
 import type { On } from "claude-code";
+import type { Engine } from "claude-code/testing";
 
 import { parseDocs, questionnaireTitle } from "./inbox";
 
@@ -17,6 +18,7 @@ function world(on: On) {
   const sent: string[] = [];
   const files = new Map<string, string>();
   const checks: string[] = [];
+  const checked: string[] = [];
   mock.store(on);
   on("session.id", async () => ({ value: SESSION }));
   on("session.root", async () => ({ value: "/repo/game" }));
@@ -27,7 +29,13 @@ function world(on: On) {
     return { isDelivered: true as const };
   });
   on("prompt.submit", async (_$, e) => e as never);
-  on("tool.check", async () => ({ decision: "ask" as const }) as never);
+  // The engine's own check: it must run for every ArtifactData call, since it
+  // records the approval a pinned write needs.
+  on("tool.check", async (_$, e) => {
+    const input = (e as { input?: { url?: string } }).input;
+    checked.push(input?.url ?? "");
+    return { decision: input?.url?.includes("DENIED") ? "deny" : "ask" } as never;
+  });
   on("fs.read", async (_$, e) => {
     const text = files.get(e.path);
     return text === undefined ? { deny: `ENOENT ${e.path}` } : { value: text };
@@ -78,13 +86,17 @@ function world(on: On) {
     result: { url: "https://claude.ai/artifact/FORM42", path: "/s/out/index.html" },
     text: "Published /s/out/index.html at https://claude.ai/artifact/FORM42 (Version 1)",
   }));
-  return { docs, sent, files, checks };
+  return { docs, sent, files, checks, checked };
 }
 
-const call = async (
-  $: Parameters<Parameters<typeof test>[1]>[0],
-  input: Record<string, unknown>
-) => {
+// The inbox's background work (a publish's form item, pasted answers) runs
+// unawaited; give it a moment of real time.
+const settle = () =>
+  new Promise<void>((r) =>
+    (globalThis as unknown as { setTimeout: (f: () => void, ms: number) => void }).setTimeout(r, 50)
+  );
+
+const call = async ($: Engine, input: Record<string, unknown>) => {
   const r = await $.tool.call({ tool: TOOL, ...input } as never);
   if (r.deny !== undefined) throw new Error(r.deny);
   return String(r.result);
@@ -190,7 +202,7 @@ test("a published questionnaire becomes a form item, and pasted answers settle i
     file_path: "/s/out/index.html",
     icon: "checklist",
   } as never);
-  await new Promise((r) => setTimeout(r, 50));
+  await settle();
   const form = w.docs.get("form-FORM42")?.data ?? {};
   expect(form).toMatchObject({
     kind: "form",
@@ -201,16 +213,16 @@ test("a published questionnaire becomes a form item, and pasted answers settle i
   });
 
   await $.prompt.submit({ text: "Answers: Wrist menu review\n(3 of 3 answered)\n..." } as never);
-  await new Promise((r) => setTimeout(r, 50));
+  await settle();
   expect(w.docs.get("form-FORM42")?.data).toMatchObject({
     state: "decided",
     sessionNote: "Answers received.",
   });
 });
 
-test("ArtifactData on the inbox is allowed without a prompt, other artifacts are not", async ($, on) => {
+test("ArtifactData on the inbox is allowed without a prompt, after the engine's own check", async ($, on) => {
   mock.clock(on, { now: 1_000 });
-  world(on);
+  const w = world(on);
   await call($, { action: "setup", url: INBOX });
   const mine = await $.tool.check({
     tool: "ArtifactData",
@@ -222,4 +234,12 @@ test("ArtifactData on the inbox is allowed without a prompt, other artifacts are
     input: { action: "list", url: "https://claude.ai/artifact/OTHER" },
   } as never);
   expect(other.decision).not.toBe("allow");
+  // The engine's check ran for both, and its deny is never turned into an allow.
+  expect(w.checked).toEqual([INBOX, "https://claude.ai/artifact/OTHER"]);
+  await call($, { action: "setup", url: "https://claude.ai/artifact/DENIED" });
+  const denied = await $.tool.check({
+    tool: "ArtifactData",
+    input: { action: "update", url: "https://claude.ai/artifact/DENIED", if_version: 2 },
+  } as never);
+  expect(denied.decision).toBe("deny");
 });
