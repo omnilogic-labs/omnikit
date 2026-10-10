@@ -124,6 +124,35 @@
     return out.join("\n");
   }
 
+  // ---------- images ----------
+
+  // groups[n] lists the images shown together (one question's, or one
+  // option's); the lightbox steps through a group with the arrow keys.
+  var groups = [];
+
+  function figs(images, cls) {
+    if (!images || !images.length) return "";
+    var g = groups.push(images) - 1;
+    var html = '<span class="' + cls + '">';
+    images.forEach(function (img, k) {
+      html +=
+        '<span class="fig"><button type="button" class="zoom" data-group="' +
+        g +
+        '" data-index="' +
+        k +
+        '" aria-label="Enlarge' +
+        (img.alt ? ": " + esc(img.alt) : " image") +
+        '"><img src="' +
+        esc(img.path) +
+        '" alt="' +
+        esc(img.alt || "") +
+        '" loading="lazy" decoding="async"></button>' +
+        (img.caption ? '<span class="cap">' + inline(img.caption) + "</span>" : "") +
+        "</span>";
+    });
+    return html + "</span>";
+  }
+
   // ---------- render ----------
 
   if (spec.intro) document.getElementById("q-intro").innerHTML = md(spec.intro);
@@ -142,28 +171,18 @@
       html += '<section class="q-sec"><h3>Background</h3>' + md(q.background) + "</section>";
     if (q.what_happened)
       html += '<section class="q-sec"><h3>What happened</h3>' + md(q.what_happened) + "</section>";
-    if (q.images && q.images.length) {
-      html += '<div class="figs">';
-      q.images.forEach(function (img) {
-        html +=
-          '<figure><img src="' +
-          esc(img.path) +
-          '" alt="' +
-          esc(img.caption || "") +
-          '" loading="lazy">' +
-          (img.caption ? "<figcaption>" + inline(img.caption) + "</figcaption>" : "") +
-          "</figure>";
-      });
-      html += "</div>";
-    }
+    html += figs(q.images, "figs");
+    var visual = q.options.some((o) => o.images.length > 0);
     html +=
-      '<fieldset class="opts"><legend>' +
+      '<fieldset class="opts' +
+      (visual ? " opts-visual" : "") +
+      '"><legend>' +
       (multi ? "Choose any that apply" : "Choose one") +
       "</legend>";
     q.options.forEach(function (o, j) {
       var id = name + "-opt-" + j;
       html +=
-        '<label class="opt" for="' +
+        '<div class="opt"><label class="opt-main" for="' +
         id +
         '"><input type="' +
         type +
@@ -177,10 +196,12 @@
         esc(o.label) +
         "</span>" +
         (o.description ? '<span class="opt-desc">' + md(o.description) + "</span>" : "") +
-        "</span></label>";
+        "</span></label>" +
+        figs(o.images, "figs opt-figs") +
+        "</div>";
     });
     html +=
-      '<label class="opt opt-idk" for="' +
+      '<div class="opt opt-idk"><label class="opt-main" for="' +
       name +
       '-idk"><input type="' +
       type +
@@ -191,7 +212,7 @@
       '" value="__idk__"><span class="opt-body"><span class="opt-label">I don\'t know</span>' +
       '<span class="opt-desc"><p>If you pick this: ' +
       inline(q.idk) +
-      "</p></span></span></label>";
+      "</p></span></span></label></div>";
     html += "</fieldset>";
     html +=
       '<label class="note-label" for="' +
@@ -335,7 +356,80 @@
     refresh();
   });
 
+  // ---------- lightbox ----------
+
+  var box = document.getElementById("q-box");
+  var boxImg = document.getElementById("q-box-img");
+  var boxCap = document.getElementById("q-box-cap");
+  var boxCount = document.getElementById("q-box-count");
+  var boxStage = document.getElementById("q-box-stage");
+  var current = { group: 0, index: 0 };
+
+  function show(group, index) {
+    var list = groups[group];
+    index = (index + list.length) % list.length;
+    current = { group: group, index: index };
+    var img = list[index];
+    boxImg.src = img.path;
+    boxImg.alt = img.alt || "";
+    boxCap.innerHTML = img.caption ? inline(img.caption) : "";
+    boxCount.textContent = list.length > 1 ? index + 1 + " of " + list.length : "";
+    box.classList.toggle("is-single", list.length < 2);
+    box.classList.remove("is-actual");
+    boxStage.scrollTop = 0;
+    boxStage.scrollLeft = 0;
+  }
+
+  function openBox(group, index) {
+    show(group, index);
+    if (typeof box.showModal === "function") {
+      if (!box.open) box.showModal();
+    } else {
+      box.setAttribute("open", "");
+    }
+  }
+
+  function closeBox() {
+    if (typeof box.close === "function") box.close();
+    else box.removeAttribute("open");
+  }
+
+  // Option images sit beside the option's label, not in it, so enlarging one
+  // never picks the option.
+  list.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest(".zoom");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openBox(Number(btn.dataset.group), Number(btn.dataset.index));
+  });
+
+  document.getElementById("q-box-close").addEventListener("click", closeBox);
+  document.getElementById("q-box-prev").addEventListener("click", function () {
+    show(current.group, current.index - 1);
+  });
+  document.getElementById("q-box-next").addEventListener("click", function () {
+    show(current.group, current.index + 1);
+  });
+  // Click the picture to switch between fit-to-screen and actual size.
+  boxImg.addEventListener("click", function () {
+    box.classList.toggle("is-actual");
+  });
+  // A click on the dark backdrop, outside the picture, closes it.
+  boxStage.addEventListener("click", function (e) {
+    if (e.target === boxStage) closeBox();
+  });
+  box.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowLeft") show(current.group, current.index - 1);
+    else if (e.key === "ArrowRight") show(current.group, current.index + 1);
+    else if (e.key === "Escape" && typeof box.showModal !== "function") closeBox();
+    else return;
+    e.preventDefault();
+  });
+
+  if (groups.length) document.body.classList.add("has-images");
+
   syncInputs();
   refresh();
-  window.questionnaire = { answerBlock: answerBlock, answers: answers };
+  window.questionnaire = { answerBlock: answerBlock, answers: answers, openImage: openBox };
 })();

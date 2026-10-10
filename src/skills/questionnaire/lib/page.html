@@ -63,15 +63,38 @@
   .q-state.is-open { color: var(--muted); }
   .q-state.is-done { color: var(--ok); }
   .q-sec { min-width: 0; overflow-wrap: anywhere; }
-  .figs { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
-  figure { margin: 0; min-width: 0; }
-  figure img { display: block; width: 100%; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); }
-  figcaption { font-size: 0.8125rem; color: var(--muted); margin-top: 0.25rem; }
+  /* With images, the page widens so pictures sit side by side; text stays at reading width. */
+  body.has-images .wrap { max-width: 72rem; }
+  body.has-images :is(.intro, .q h2, .q-sec, .opts:not(.opts-visual) .opt, .note-label, .note) { max-width: 46rem; }
+  .figs { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+  .fig { display: grid; gap: 0.25rem; min-width: 0; align-content: start; }
+  .zoom { display: block; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); cursor: zoom-in; overflow: hidden; }
+  .zoom:hover { border-color: var(--accent); }
+  .zoom img { display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain; }
+  .cap { font-size: 0.8125rem; color: var(--muted); }
+  .opts-visual { grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); align-items: stretch; }
+  .opts-visual .opt-idk { grid-column: 1 / -1; }
+  .opt-figs { padding: 0 0.75rem 0.75rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); }
+  .opt-figs .zoom img { max-height: 50vh; }
+  /* Lightbox: fit to the screen; click the picture for actual size, then scroll. */
+  #q-box { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: rgb(8 10 14 / 0.98); color: #e5e9ef; }
+  #q-box::backdrop { background: rgb(8 10 14 / 0.7); }
+  #q-box[open] { display: grid; grid-template-rows: auto 1fr auto; }
+  .box-bar { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 16px; }
+  .box-bar button { background: transparent; color: inherit; border-color: rgb(255 255 255 / 0.3); }
+  #q-box-count { font: 500 0.875rem var(--font-mono); font-variant-numeric: tabular-nums; margin-right: auto; }
+  #q-box.is-single #q-box-prev, #q-box.is-single #q-box-next { display: none; }
+  #q-box-stage { overflow: auto; display: grid; place-items: center; min-height: 0; padding: 0 16px; }
+  #q-box-img { max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; }
+  #q-box.is-actual #q-box-stage { place-items: start; }
+  #q-box.is-actual #q-box-img { max-width: none; max-height: none; cursor: zoom-out; }
+  #q-box-cap { padding: 0.5rem 16px 0.75rem; font-size: 0.9375rem; text-align: center; min-height: 1.5em; }
   .opts { border: 0; margin: 0; padding: 0; display: grid; gap: 0.5rem; min-width: 0; }
   .opts legend { font: 500 0.75rem/1.4 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 0; margin-bottom: 0.5rem; }
-  .opt { display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+  .opt { display: grid; border: 1px solid var(--line); border-radius: 4px; min-width: 0; }
   .opt:hover { border-color: var(--accent); }
   .opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .opt-main { display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; cursor: pointer; }
   .opt input { margin-top: 0.3rem; accent-color: var(--accent); flex: none; }
   .opt-body { display: grid; gap: 0.125rem; min-width: 0; overflow-wrap: anywhere; }
   .opt-label { font-weight: 600; }
@@ -125,6 +148,17 @@
     <button type="button" class="reset" id="q-reset">Clear answers</button>
   </section>
 </div>
+
+<dialog id="q-box" aria-label="Image viewer">
+  <div class="box-bar">
+    <span id="q-box-count"></span>
+    <button type="button" id="q-box-prev" aria-label="Previous image">&larr; Prev</button>
+    <button type="button" id="q-box-next" aria-label="Next image">Next &rarr;</button>
+    <button type="button" id="q-box-close" autofocus>Close</button>
+  </div>
+  <div id="q-box-stage"><img id="q-box-img" alt="" /></div>
+  <p id="q-box-cap"></p>
+</dialog>
 
 <script type="application/json" id="q-spec">
   __SPEC__

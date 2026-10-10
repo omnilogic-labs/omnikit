@@ -1,7 +1,7 @@
 // Renders the questionnaire skill's sample spec in happy-dom, answers every
 // question through the page's own inputs, and checks the paste-back block.
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Window } from "happy-dom";
@@ -171,11 +171,79 @@ test("build copies images and returns a files map with relative paths", async ()
   dirs.push(out);
   const { page, files } = build(SAMPLE, out);
   expect(page).toBe(join(out, "index.html"));
-  expect(Object.keys(files)).toEqual(["images/01-render.svg"]);
+  // render.svg is used three times but copied once.
+  expect(Object.keys(files)).toEqual([
+    "images/01-render.svg",
+    "images/02-lowpoly.svg",
+    "images/03-pbr.svg",
+  ]);
   expect(readFileSync(files["images/01-render.svg"], "utf8")).toContain("<svg");
   const html = readFileSync(page, "utf8");
   expect(html.startsWith("<title>Rover art pass decisions</title>")).toBe(true);
   expect(html).not.toMatch(/<!doctype|<html|<body/i);
   const p = await open(html);
-  expect(p.doc.querySelector("figure img")?.getAttribute("src")).toBe("images/01-render.svg");
+  expect(p.doc.querySelector(".figs img")?.getAttribute("src")).toBe("images/01-render.svg");
+});
+
+test("options show their own images, and enlarging one does not pick the option", async () => {
+  const { html } = render(sample(), join(SKILL, "examples"));
+  const p = await open(html);
+  expect(p.doc.querySelector("#q-card-0 .opts")?.classList.contains("opts-visual")).toBe(true);
+  const opt1 = [...p.doc.querySelectorAll(".opt:has(#q-0-opt-1) .opt-figs img")];
+  expect(opt1.map((i) => i.getAttribute("src"))).toEqual([
+    "images/03-pbr.svg",
+    "images/01-render.svg",
+  ]);
+  expect(p.doc.body.classList.contains("has-images")).toBe(true);
+
+  (p.doc.querySelector(".opt:has(#q-0-opt-1) .zoom") as unknown as HTMLButtonElement).click();
+  expect((p.doc.getElementById("q-0-opt-1") as unknown as HTMLInputElement).checked).toBe(false);
+  expect(p.output()).toContain(
+    "style. Which look should the rover models use? [blocking]\n  Answer: (no answer yet)"
+  );
+
+  const box = p.doc.getElementById("q-box") as unknown as HTMLDialogElement;
+  expect(box.open).toBe(true);
+  const img = () => p.doc.getElementById("q-box-img")?.getAttribute("src");
+  expect(img()).toBe("images/03-pbr.svg");
+  expect(p.doc.getElementById("q-box-count")?.textContent).toBe("1 of 2");
+  // Next steps to the reference in the same option, then wraps around.
+  (p.doc.getElementById("q-box-next") as unknown as HTMLButtonElement).click();
+  expect(img()).toBe("images/01-render.svg");
+  expect(p.doc.getElementById("q-box-cap")?.textContent).toBe("Reference: pass 1 render");
+  (p.doc.getElementById("q-box-next") as unknown as HTMLButtonElement).click();
+  expect(img()).toBe("images/03-pbr.svg");
+  // Clicking the picture toggles actual size.
+  (p.doc.getElementById("q-box-img") as unknown as HTMLImageElement).click();
+  expect(box.classList.contains("is-actual")).toBe(true);
+  (p.doc.getElementById("q-box-close") as unknown as HTMLButtonElement).click();
+  expect(box.open).toBe(false);
+});
+
+test("--embed puts images in the page as data URIs", async () => {
+  const out = mkdtempSync(join(tmpdir(), "questionnaire-"));
+  dirs.push(out);
+  const { page, files } = build(SAMPLE, out, { embed: true });
+  expect(files).toEqual({});
+  const p = await open(readFileSync(page, "utf8"));
+  const srcs = [...p.doc.querySelectorAll(".zoom img")].map((i) => i.getAttribute("src") ?? "");
+  expect(srcs.length).toBe(5);
+  expect(srcs.every((s) => s.startsWith("data:image/svg+xml;base64,"))).toBe(true);
+});
+
+test("image entries are checked, and oversized files are refused", () => {
+  const spec = sample();
+  spec.questions[0].options[0].images = [{ caption: "no path" }, 7];
+  const errs = validate(spec).join("\n");
+  expect(errs).toContain("questions[0].options[0].images[0]: a path string");
+  expect(errs).toContain("questions[0].options[0].images[1]: a path string");
+
+  const dir = mkdtempSync(join(tmpdir(), "questionnaire-"));
+  dirs.push(dir);
+  writeFileSync(join(dir, "big.png"), "");
+  truncateSync(join(dir, "big.png"), 16 * 1024 * 1024);
+  const big = sample();
+  big.questions[0].images = ["big.png"];
+  big.questions[0].options.forEach((o: { images?: unknown }) => delete o.images);
+  expect(() => render(big, dir)).toThrow("over 15 MB");
 });

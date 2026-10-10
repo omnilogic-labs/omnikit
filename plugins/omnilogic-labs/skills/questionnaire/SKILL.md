@@ -21,24 +21,25 @@ happened, what each option costs, and what you will do if the owner does not kno
 
 ## Steps
 
-1. Write the spec as JSON in a scratch directory (the shape is below).
-   Put image files next to it, or give paths relative to the spec file.
+1. Write the spec as JSON in a scratch directory (the shape is below). Put image files next to it, or give paths
+   relative to the spec file. Look at every image yourself before you use it.
 2. Build the page. `bin/questionnaire` is at the root of this skill directory:
 
    ```bash
-   bin/questionnaire <spec.json> <out dir>
+   bin/questionnaire [--embed] <spec.json> <out dir>
    ```
 
-   It needs `bun` or `node`. It checks the spec, copies each image into `<out dir>/images/`, writes
-   `<out dir>/index.html`, and prints `{ "page": ..., "files": { "images/01-x.png": "<path>" } }`. On a bad spec
-   it exits 1 and lists every problem; fix them and run it again.
+   It needs `bun` or `node`. It checks the spec, copies each image once into `<out dir>/images/`, writes
+   `<out dir>/index.html`, and prints `{ "page": ..., "files": { "images/01-x.png": "<path>" } }`. `--embed`
+   puts the images in the page as data URIs instead (one file, `files` empty; refused past 16 MB). On a bad spec
+   it exits 1 and lists every problem; fix them and run it again. Images over 15 MB are refused.
    Windows: it is a bash script. Run it from Git Bash, or from PowerShell as
    `& "$env:ProgramFiles\Git\bin\bash.exe" <skill dir>/bin/questionnaire ...`, never bare.
 
 Then show the page to the owner:
 
 - Publish it with the Artifact tool: `file_path` is the printed `page`, and `files` is the printed `files` map,
-  passed as is. Pass `icon: "checklist"` and a one-sentence `description`. The out dir must be under the working
+  passed as is. Without `files` the images are missing from the published page. Pass `icon: "checklist"` and a one-sentence `description`. The out dir must be under the working
   directory or the scratchpad. The page already meets the artifact page contract, so do not edit it.
 - Give the owner the link. To revise the questions, edit the spec, rebuild into the same out dir, and publish the
   same path again.
@@ -65,10 +66,15 @@ if they block you.
       "blocking": true,
       "background": "Why this question exists. Markdown.",
       "what_happened": "What you tried or saw. Markdown.",
-      "images": [{ "path": "render.png", "caption": "Pass 1 render" }],
+      "images": [{ "path": "ref.png", "caption": "Reference" }, "render.png"],
       "options": [
-        { "label": "Low poly", "value": "lowpoly", "description": "What it costs and what follows." },
-        { "label": "Smooth PBR", "value": "pbr", "description": "..." }
+        {
+          "label": "Low poly",
+          "value": "lowpoly",
+          "description": "What it costs and what follows.",
+          "images": [{ "path": "lowpoly.png", "caption": "Low poly test" }, "ref.png"]
+        },
+        { "label": "Smooth PBR", "value": "pbr", "description": "...", "images": ["pbr.png"] }
       ],
       "multi": false,
       "idk": "What you will do if the owner picks I don't know."
@@ -78,7 +84,7 @@ if they block you.
 ```
 
 Required: `title`, and per question `id` (unique), `title`, `options` (each with `label`), and `idk`. Everything
-else is optional. `value` defaults to `label`. `multi: true` makes the options checkboxes. Every question gets an
+else is optional. `value` defaults to `label`. An image is a path, or `{ "path", "caption", "alt" }`. `multi: true` makes the options checkboxes. Every question gets an
 optional note box and an "I don't know" choice. Markdown means paragraphs, `-` and `1.` lists, `**bold**`,
 `*italic*`, `` `code` ``, and `[links](https://...)`; HTML in the spec shows as text.
 
@@ -115,8 +121,10 @@ two differ.
 
 ## Notes
 
-- Images must be local files (png, jpg, gif, webp, svg, avif) or `data:` URIs. Download remote images first:
-  artifact pages cannot load other sites.
+- Images: local png, jpg, gif, webp, svg or avif files, or `data:` URIs. Download remote images first: artifact
+  pages cannot load other sites. Questions and options take any number. Images sit side by side and wrap; options
+  with images become cards. Clicking any image opens a viewer: arrows step through that question's or option's
+  images (so a capture and its reference flip in place), and clicking the picture shows actual size.
 - Answers persist in the viewer's browser storage, so a reload keeps them. Nothing reaches you until the owner
   pastes the block.
 - The example spec in `examples/sample.json` builds a working page; copy it as a starting point.
