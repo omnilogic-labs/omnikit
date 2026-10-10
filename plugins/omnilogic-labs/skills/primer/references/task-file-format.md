@@ -50,7 +50,10 @@ parallelizable: true                       # optional; default true. false pins 
   serialize it against its siblings.
 - **`acceptance`** is a single shell command (it may be a `&&` chain) that exits
   0 only when the task is genuinely complete. Keep it specific to this task, not
-  a full suite.
+  a full suite. It covers objective outcomes only. A subjective goal (look, feel,
+  style, "matches the reference") stays in the Goal in plain words, with its
+  reference, for the owner to judge at review. Never encode it as a made-up
+  number in the command, and use a number only when there is a reason for it.
 - **`parallelizable: false`** is the escape hatch for a task that is technically
   disjoint by globs but still must run alone (for example a migration that locks
   the schema, or a task that runs a global codemod).

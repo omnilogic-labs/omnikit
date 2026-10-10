@@ -7,13 +7,18 @@ do that in their own contexts and send back short reports.
 
 1. **You are the coordinator. Keep your context small.** Do not read code, plans, diffs, or long outputs
    yourself, even to plan. Dispatch a worker to plan, implement, or verify, and read only its short reply.
-2. **Planners always use the deep tier.** A plan always ends with acceptance criteria: numbered, each
-   objectively checkable, each naming the command or inspection that verifies it.
+2. **Planners always use the deep tier.** A plan always ends each task with acceptance criteria in two kinds.
+   **Checks** cover objective outcomes (it builds, tests pass, the feature behaves, real measured performance),
+   each naming the command or inspection that verifies it. **Judged goals** cover subjective outcomes (look,
+   feel, style, "matches the reference"): the goal as stated, its reference, and who judges it. Never let a plan
+   turn a judged goal into a made-up number. Use a number only when there is a reason for it and it makes sense;
+   when changing work that tries to meet an existing number, ask whether that number still helps.
 3. **Builders use the fast tier for rote or straightforward work, and the deep tier for complicated
    implementations.** Each builder works in its own git worktree.
 4. **Verifiers use the fast tier per task, and the deep tier for a milestone review.** A verifier reports
-   PASS, FAIL, or UNVERIFIED for each criterion. UNVERIFIED never counts as passed.
-5. **Two FAILs on a task mean the planner rescopes it.** Do not send it to a builder a third time.
+   PASS, FAIL, or UNVERIFIED for each check, and MEETS, CLOSE, MISSES, or UNJUDGED with reasons for each
+   judged goal. UNVERIFIED never counts as passed.
+5. **Two failed verify rounds on a task mean the planner rescopes it.** Do not send it to a builder a third time.
 6. **Integrate one wave at a time.** Merge the wave, run the repo check command, then fast-forward the base
    branch.
 7. **Track state in LEDGER.md.** Update it after every dispatch, report, merge, and block.
@@ -30,11 +35,11 @@ body. Deep is `pro` and fast is `flash`.
 How to dispatch each role is in `references/hosts.md`; `references/models.md` maps each tier to every host's
 models. Read hosts.md once at the start.
 
-| Role     | Tier                                      | Writes                                        |
-| -------- | ----------------------------------------- | --------------------------------------------- |
-| planner  | deep, always                              | plans, rescoped plans, milestone reviews      |
-| builder  | fast for rote work; deep for complex work | code on its own branch, in its own worktree   |
-| verifier | fast per task; deep for milestone review  | a PASS / FAIL / UNVERIFIED line per criterion |
+| Role     | Tier                                      | Writes                                      |
+| -------- | ----------------------------------------- | ------------------------------------------- |
+| planner  | deep, always                              | plans, rescoped plans, milestone reviews    |
+| builder  | fast for rote work; deep for complex work | code on its own branch, in its own worktree |
+| verifier | fast per task; deep for milestone review  | a verdict per check, a judgement per goal   |
 
 ## Setup
 
@@ -57,9 +62,10 @@ models. Read hosts.md once at the start.
    - mark the task `building`.
 3. **Verify.** When a builder reports done, dispatch a verifier on the same worktree and mark the task
    `verifying`. The verifier gets the plan path and task name, never the builder's claims.
-4. **Fix.** On any FAIL or UNVERIFIED, send the failing lines back to the builder and mark the task
-   `fixing (round n)`. After the second FAIL, dispatch a planner to rescope instead.
-5. **Pass.** When every criterion is PASS, mark the task `passed`.
+4. **Fix.** On any FAIL, UNVERIFIED, MISSES, or UNJUDGED, send those lines back to the builder and mark the task
+   `fixing (round n)`. After the second failed round, dispatch a planner to rescope instead.
+5. **Pass.** When every check is PASS and every judged goal is MEETS or CLOSE, mark the task `passed`. Record each
+   CLOSE and its reasons in the ledger for the owner's milestone look.
 6. **Integrate.** When the whole wave is `passed`:
    - create an integration worktree with `scripts/wt create <wave>`;
    - run `scripts/wt merge <task> --into <prefix><wave>` for each task;
@@ -71,7 +77,10 @@ models. Read hosts.md once at the start.
    integration worktree.
 
 7. **Review.** At a milestone, dispatch a verifier on the deep tier to check the milestone's criteria on
-   the integrated base branch.
+   the integrated base branch. For judged goals, also get a second independent look from another model when
+   one is available, then show the owner the result next to the reference, with each CLOSE from the ledger (the questionnaire
+   skill builds that page).
+   The owner's judgement decides; record it in the ledger.
 8. **Repeat** with the next wave. Push only as the push policy says.
 
 ## Stopping
@@ -99,7 +108,7 @@ When every task is `merged` and the milestone review passes:
 
 - Ask workers for replies of ten lines or fewer, with file paths instead of pasted output.
 - If a reply is unclear, ask the worker a follow-up question. Do not open the file yourself.
-- A builder's "done" is a claim. Only a verifier's PASS moves a task forward.
+- A builder's "done" is a claim. Only a verifier's report moves a task forward.
 
 ## Worktree helper
 
