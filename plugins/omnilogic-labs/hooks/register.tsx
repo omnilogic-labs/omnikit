@@ -54,7 +54,11 @@ type WorkerInput = {
   effort?: unknown;
   sandbox?: unknown;
   timeoutSec?: unknown;
+  resume?: unknown;
 };
+
+const THREAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const JOB_ID = /^[0-9a-f]{8}$/i;
 
 // Single-quote a string for bash.
 const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
@@ -589,6 +593,13 @@ export const register: Register = (on) => {
             type: "number",
             description: `Optional wall-clock limit in seconds (default ${DEFAULT_TIMEOUT_SEC}, at most ${MAX_TIMEOUT_SEC}).`,
           },
+          resume: {
+            type: "string",
+            description:
+              "codex only: continue an earlier codex session instead of starting a new one, with task as " +
+              "the next prompt. Pass its thread id, or the 8-character id of an earlier external_worker " +
+              "job (which also supplies its cwd when cwd is not given).",
+          },
         },
         required: ["task", "engine"],
       },
@@ -710,7 +721,36 @@ export const register: Register = (on) => {
     }
     const model = optional(input.model);
     const effort = optional(input.effort);
-    const cwd = optional(input.cwd) || (await $.session.root());
+    let cwd = optional(input.cwd);
+    let resume = optional(input.resume);
+    if (resume !== "") {
+      if (engine !== "codex")
+        return { deny: "external_worker resume works with engine codex only." };
+      if (JOB_ID.test(resume)) {
+        // An earlier job, from any session: its thread id is in the first
+        // stream line, its cwd on the second line of params.
+        const found = await $.process.run([
+          "bash",
+          "-c",
+          'for d in "$1"/*/"$2"; do [ -f "$d/params" ] || continue; sed -n 2p "$d/params"; ' +
+            'grep -m1 -o \'"thread_id":"[^"]*"\' "$d/stream.jsonl" | cut -d\'"\' -f4; exit 0; done; exit 1',
+          "_",
+          ROOT,
+          resume,
+        ]);
+        const [jobCwd = "", thread = ""] = found.stdout.split("\n").map((l) => l.trim());
+        if (found.exitCode !== 0 || !THREAD_ID.test(thread)) {
+          return { deny: `external_worker found no codex thread for job ${resume} under ${ROOT}.` };
+        }
+        resume = thread;
+        cwd ||= jobCwd;
+      } else if (!THREAD_ID.test(resume)) {
+        return {
+          deny: "external_worker resume must be a codex thread id or an 8-character job id.",
+        };
+      }
+    }
+    cwd ||= await $.session.root();
     const timeoutSec =
       typeof input.timeoutSec === "number" && input.timeoutSec > 0
         ? Math.min(Math.floor(input.timeoutSec), MAX_TIMEOUT_SEC)
@@ -762,7 +802,7 @@ export const register: Register = (on) => {
     await $.fs.write(`${dir}/task.txt`, task);
     await $.fs.write(
       `${dir}/params`,
-      [engine, cwd, String(timeoutSec), model, effort, sandbox].join("\n") + "\n"
+      [engine, cwd, String(timeoutSec), model, effort, sandbox, resume].join("\n") + "\n"
     );
 
     // A missing cwd fails the job here, without spending a background task.

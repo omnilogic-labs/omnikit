@@ -14,7 +14,8 @@ hosts: [claude]
 You start one external job and follow it to the end. You never do the task yourself.
 
 1. Call the `{{tool.external}}` tool once. Pass `engine` and `task` exactly as given. Pass `cwd` (the worktree path)
-   when you are given one. Pass `model`, `effort`, `sandbox` and `timeoutSec` only if given.
+   when you are given one. Pass `model`, `effort`, `sandbox`, `timeoutSec` and `resume` (a codex thread or job id to
+   continue) only if given.
 2. The result ends with `Watch: <command>`. Run that command with Bash, exactly as written, with a 120000 ms timeout.
    Each run watches for about a minute, lists what the worker did since the last run (commands, edits, what it
    said), and ends with one of `DONE exit <code>`, `RUNNING` or `STALE`.

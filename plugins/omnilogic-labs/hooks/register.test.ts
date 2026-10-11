@@ -15,22 +15,30 @@ const key = (path: string) => path.replace(/^[A-Za-z]:/, "").replaceAll("\\", "/
 
 // The world beneath the plugin: an in-memory filesystem with one real
 // directory, a session id, and a Bash tool that records the call.
-function world(on: On, options: { denyBash?: boolean } = {}) {
+// options.jobs maps an earlier job id to the "cwd\nthread id" that the lookup
+// of that job's folder prints.
+function world(on: On, options: { denyBash?: boolean; jobs?: Record<string, string> } = {}) {
   const files = new Map<string, string>();
   const bash: string[] = [];
   const timeouts: (number | undefined)[] = [];
   const toasts: string[] = [];
   on("session.id", async () => ({ value: SESSION }));
   on("session.root", async () => ({ value: "/repo" }));
-  on("process.run", async () => ({
-    value: {
-      exitCode: 0,
-      stdout: "",
-      stderr: "",
-      isStdoutTruncated: false,
-      isStderrTruncated: false,
-    },
-  }));
+  on("process.run", async (_$, e) => {
+    // The job lookup is bash -c <script> _ <root> <job id>; mkdir has no job id.
+    const argv = e.argv;
+    const lookup = argv.length === 6;
+    const found = lookup ? options.jobs?.[argv[5] ?? ""] : undefined;
+    return {
+      value: {
+        exitCode: lookup && found === undefined ? 1 : 0,
+        stdout: found ?? "",
+        stderr: "",
+        isStdoutTruncated: false,
+        isStderrTruncated: false,
+      },
+    };
+  });
   on("fs.write", async (_$, e) => {
     files.set(key(e.path), e.text);
     return { value: undefined };
@@ -77,7 +85,7 @@ test("a fake job moves from running to done when exit appears", async ($, on) =>
   expect(job?.taskId).toBe("bg-1");
   expect(job?.dir).toBe(`/tmp/omnilogic-labs/workers/${SESSION}/${job?.id}`);
   expect(w.files.get(`${job?.dir}/task.txt`)).toBe("SENTINEL-42");
-  expect(w.files.get(`${job?.dir}/params`)).toBe("fake\n/repo\n1800\n\n\nnone\n");
+  expect(w.files.get(`${job?.dir}/params`)).toBe("fake\n/repo\n1800\n\n\nnone\n\n");
   expect(w.bash).toHaveLength(1);
   expect(w.bash[0]).toContain("/hooks/run-worker.sh'");
   // Without a timeout, Claude Code stops a background command at 10 minutes.
@@ -277,7 +285,7 @@ test("sandbox defaults to none, passes a known mode through, and refuses others"
   const w = world(on);
   await $.tool.call({ tool: TOOL, task: "x", engine: "fake", sandbox: "read-only", ...RUNNER });
   const [job] = w.state.jobs;
-  expect(w.files.get(`${job?.dir}/params`)).toBe("fake\n/repo\n1800\n\n\nread-only\n");
+  expect(w.files.get(`${job?.dir}/params`)).toBe("fake\n/repo\n1800\n\n\nread-only\n\n");
 
   const bad = await $.tool.call({
     tool: TOOL,
@@ -288,4 +296,23 @@ test("sandbox defaults to none, passes a known mode through, and refuses others"
   });
   expect(bad.deny).toContain("sandbox must be one of none, workspace-write, read-only");
   expect(w.bash).toHaveLength(1);
+});
+
+test("resume takes a codex thread id, or an earlier job's thread and cwd", async ($, on) => {
+  mock.clock(on, { now: 1_000 });
+  const thread = "01a12831-5b9c-74c0-bce5-a117c6a4cd80";
+  const w = world(on, { jobs: { "90813259": `/repo\n${thread}\n` } });
+  const params = (i: number) => w.files.get(`${w.state.jobs[i]?.dir}/params`);
+
+  await $.tool.call({ tool: TOOL, task: "go on", engine: "codex", resume: thread, ...RUNNER });
+  expect(params(0)).toBe(`codex\n/repo\n1800\n\n\nnone\n${thread}\n`);
+  await $.tool.call({ tool: TOOL, task: "go on", engine: "codex", resume: "90813259", ...RUNNER });
+  expect(params(1)).toBe(`codex\n/repo\n1800\n\n\nnone\n${thread}\n`);
+
+  const deny = async (input: Record<string, unknown>) =>
+    (await $.tool.call({ tool: TOOL, task: "x", ...input, ...RUNNER } as never)).deny;
+  expect(await deny({ engine: "codex", resume: "deadbeef" })).toContain("no codex thread");
+  expect(await deny({ engine: "codex", resume: "../etc" })).toContain("thread id or");
+  expect(await deny({ engine: "agy", resume: thread })).toContain("codex only");
+  expect(w.state.jobs).toHaveLength(2);
 });

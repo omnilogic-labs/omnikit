@@ -6,7 +6,8 @@
 # The job dir holds what the hook wrote before calling this:
 #   task.txt   the task, verbatim
 #   params     one value per line: engine, cwd, timeoutSec, model, effort,
-#              sandbox (none, workspace-write or read-only)
+#              sandbox (none, workspace-write or read-only), and a codex
+#              thread id to resume (empty for a new session)
 # and what this script writes:
 #   stream.jsonl  the engine's JSONL events (stdout only)
 #   stderr.log    the engine's stderr, kept apart so stream.jsonl stays valid
@@ -51,6 +52,7 @@ fi
   IFS= read -r model || true
   IFS= read -r effort || true
   IFS= read -r sandbox || true
+  IFS= read -r resume || true
 } < "$dir/params"
 timeout_sec=${timeout_sec:-1800}
 sandbox=${sandbox:-none}
@@ -85,13 +87,20 @@ task=$(cat "$dir/task.txt")
 rc=0
 case "$engine" in
   codex)
-    args=(exec --json -C "$cwd" -o "$dir/last.txt")
+    # exec resume takes no -C or -s: the script has already cd'ed to cwd, and
+    # the sandbox goes in as config. The task is the prompt after the id.
+    if [ -n "$resume" ]; then
+      args=(exec resume --json -o "$dir/last.txt")
+    else
+      args=(exec --json -C "$cwd" -o "$dir/last.txt")
+    fi
     case "$sandbox" in
       none) args+=(--dangerously-bypass-approvals-and-sandbox) ;;
-      *) args+=(-s "$sandbox") ;;
+      *) if [ -n "$resume" ]; then args+=(-c "sandbox_mode=\"$sandbox\""); else args+=(-s "$sandbox"); fi ;;
     esac
     [ -n "$model" ] && args+=(-m "$model")
     [ -n "$effort" ] && args+=(-c "model_reasoning_effort=\"$effort\"")
+    [ -n "$resume" ] && args+=("$resume")
     timeout "$timeout_sec" codex "${args[@]}" "$task" \
       < /dev/null > "$dir/stream.jsonl" 2> "$dir/stderr.log" || rc=$?
     ;;
