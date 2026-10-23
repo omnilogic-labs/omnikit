@@ -32,8 +32,8 @@ do that in their own contexts and send back short reports.
    PASS, FAIL, or UNVERIFIED for each check, and MEETS, CLOSE, MISSES, or UNJUDGED with reasons for each
    judged goal. UNVERIFIED never counts as passed.
 5. **Two failed verify rounds on a task mean the planner rescopes it.** Do not send it to a builder a third time.
-6. **Integrate one wave at a time.** Merge the wave, run the repo check command, then fast-forward the base
-   branch.
+6. **Integrate one wave at a time.** Rebase each task onto the integration branch, run the repo check command,
+   then fast-forward the base branch. History stays linear and keeps the builders' commits.
 7. **Track state in LEDGER.md.** Update it after every dispatch, report, merge, and block.
 8. **Stop only for an owner decision, a missing credential, or a broken base branch.** Otherwise keep going.
 9. **Do not dispatch duplicate workers.** Before dispatching, check what is already running.
@@ -85,7 +85,9 @@ models. Read hosts.md once at the start.
 
 1. **Plan.** If there is no plan, dispatch a planner with the goal. It writes the plan to a file and replies
    with the file path, the task list, and the waves. Record each task as `planned` in the ledger. Commit the
-   plan file and LEDGER.md to the base branch, and commit them again whenever they change.
+   plan file and LEDGER.md to the base branch. After that, keep LEDGER.md current on disk and commit it only
+   when a wave lands, at a milestone, and when you stop or finish, with a message that says what happened (for
+   example `Land wave 2: schema and design system; 05 blocked on a Gemini key`), not a bare state change.
 2. **Build.** For each task in the current wave whose dependencies are `merged`, up to max lanes at once:
    - create a worktree with `scripts/wt create <task>` (`scripts/` is relative to this SKILL.md's directory, not the repo root), which prints its path;
    - pick the tier the plan gives: fast for rote work, deep for anything complicated;
@@ -99,13 +101,15 @@ models. Read hosts.md once at the start.
    CLOSE and its reasons in the ledger for the owner's milestone look.
 6. **Integrate.** When the whole wave is `passed`:
    - create an integration worktree with `scripts/wt create <wave>`;
-   - run `scripts/wt merge <task> --into <prefix><wave>` for each task;
+   - run `scripts/wt land <task> --into <prefix><wave>` for each task: it rebases the task branch onto the
+     integration branch and fast-forwards it;
    - dispatch a builder to run the check command there and fix trivial breakage only;
    - fast-forward the base branch to the integration branch: `git merge --ff-only <prefix><wave>`;
    - mark each task `merged`, then `scripts/wt remove` each task and integration worktree. When the work is done, only the base branch remains: no leftover branches or worktrees.
 
-   If `wt merge` refuses because two branches touched the same files, have a builder resolve it in the
-   integration worktree.
+   If `wt land` refuses because two branches touched the same files, or the rebase conflicts, have a builder run
+   `git rebase <prefix><wave>` in the task's worktree, resolve the conflicts, rerun the task's checks, and commit;
+   then land it again.
 
 7. **Review.** At a milestone, dispatch a verifier on the deep tier to check the milestone's criteria on
    the integrated base branch. For judged goals, also get a second independent look from another model when
@@ -143,12 +147,15 @@ When every task is `merged` and the milestone review passes:
 
 ## Worktree helper
 
-`scripts/wt` (in this SKILL.md's directory, not the repo root `scripts/`) creates, lists, merges, and removes one worktree per task. Status goes to stderr and data to
+`scripts/wt` (in this SKILL.md's directory, not the repo root `scripts/`) creates, lists, lands, and removes one worktree per task. Status goes to stderr and data to
 stdout, so `scripts/wt list` is safe to parse. It is bash: on Windows run it from Git Bash, or from PowerShell as `& "$env:ProgramFiles\Git\bin\bash.exe" <skill dir>/scripts/wt ...`, never bare.
 
 - `create <name> [base]` makes `<root>/<name>` on branch `<prefix><name>` and prints its path.
 - `list` prints name, branch, clean or dirty, commits ahead, and path.
-- `merge <name> [--into <branch>]` refuses when both sides changed the same files since their merge-base.
+- `land <name> [--into <branch>]` rebases the task branch onto `<branch>` and fast-forwards `<branch>`. It refuses
+  when both sides changed the same files since their merge-base, and aborts a conflicting rebase. It merges instead
+  only when the task's commits are already on the base branch or a remote, or include a merge, since rebasing
+  would rewrite shared commits. `merge` is an alias.
 - `remove <name>` refuses a dirty worktree and keeps an unmerged branch.
 
 The defaults are `../<repo>-worktrees/<name>` on `wave/<name>`; `.agents/coordinator.md` can change both.

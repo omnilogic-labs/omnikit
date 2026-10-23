@@ -20,8 +20,9 @@ The index. Contains:
   2. The build command exits 0 (for example `bun run build`).
   3. The task's acceptance command exits 0.
   4. The typecheck exits 0 (for example `bunx tsc --noEmit`).
-- The commit convention: short imperative subject scoped to the task. The runner
-  mints the `[task-complete] NN-slug` marker; the task does not mint it itself.
+- The commit convention: an imperative subject that says what changed, and a
+  body that says why when the diff does not show it. No `NN-slug:` prefix; the
+  runner mints the `[task-complete] NN-slug` marker, and the task does not.
 
 ## docs/init/NN-slug.md
 

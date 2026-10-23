@@ -27,8 +27,9 @@ path.
 **Fix mode.** When the coordinator sends verifier failures, fix them on the same branch, rerun every criterion,
 and commit.
 
-**Integrate mode.** When the coordinator says "integrate", the wave's branches are merged into the integration
-worktree you are given. Run the check command there. Fix only trivial breakage: imports, lock files, formatting,
+**Integrate mode.** When the coordinator says "integrate", the wave's branches are rebased onto the integration
+branch in the worktree you are given. If a task needs its rebase resolved, do it in that task's worktree with
+`git rebase <integration branch>`, then rerun its checks. Run the check command there. Fix only trivial breakage: imports, lock files, formatting,
 a test both branches touched. Report anything bigger instead of fixing it.
 
 Your reply is ten lines or fewer: the branch and commit, PASS / FAIL / UNVERIFIED per check from your own run,

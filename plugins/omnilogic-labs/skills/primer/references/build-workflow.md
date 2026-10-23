@@ -26,7 +26,7 @@ the vendored `primer-exec` runner instead (see `references/primer-exec.md`).
    as `parallel()` of worktree-isolated agents. Then one integration agent lands
    the worktrees onto the build branch, re-runs the gates, mints the markers, and
    appends shared context to `AGENTS.md`.
-4. **Fail safe.** On a gate failure or merge conflict, log it and stop for human
+4. **Fail safe.** On a gate failure or a conflict, log it and stop for human
    review (or re-run the single offending task sequentially).
 
 ## Why an integration agent
@@ -139,7 +139,7 @@ for (let i = 0; i < levels.length; i++) {
     // integration barrier: land, gate, mint markers, update AGENTS.md
     const gate = await agent(
       `Integrate the just-completed tasks [${group.map((t) => t.slug).join(', ')}] onto the build branch. ` +
-      `For each task's worktree: FIRST, if it has uncommitted changes, stage and commit them (the worktree is isolated to this one task, so \`git add -A && git commit\` is safe and never loses work); a task whose worktree has no commits at all is a failure, record it in failures. THEN land its commits (cherry-pick or merge), resolve trivially or report a conflict. ` +
+      `For each task's worktree: FIRST, if it has uncommitted changes, stage and commit them (the worktree is isolated to this one task, so \`git add -A && git commit\` is safe and never loses work); a task whose worktree has no commits at all is a failure, record it in failures. THEN land its commits: rebase them onto the build branch and fast-forward (merge only if a rebase is impossible), resolve trivially or report a conflict. ` +
       `Then on the combined tree run the gates once: (1) git status --porcelain empty, (2) the project build command, ` +
       `(3) each task's acceptance command, (4) the typecheck. If all pass, write one empty commit per task with subject ` +
       `"[task-complete] <slug>", and append any new shared patterns to AGENTS.md. Return pass, the slugs you landed, and any failures.`,

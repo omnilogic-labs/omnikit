@@ -18,7 +18,7 @@ States: planned, building, verifying, fixing (round n), passed, merged, blocked.
 |      |            |       |                 |       |
 
 Notes hold the model used, the verify result in one line (for example `PASS 3/3; look CLOSE: sky too saturated`
-or `FAIL 2: check 4`), the merge commit, and anything the next wave needs.
+or `FAIL 2: check 4`), the landed commit, and anything the next wave needs.
 
 ## Running workers
 

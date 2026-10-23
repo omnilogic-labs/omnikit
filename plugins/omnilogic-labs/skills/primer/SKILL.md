@@ -115,7 +115,7 @@ Pick the runner by host:
 
 Either way, every task ends in a commit and the build is resumable: completed
 tasks carry a `[task-complete] NN-slug` marker that the runner skips. On a gate
-failure or merge conflict, stop for human review.
+failure or conflict, stop for human review.
 
 ## Conventions
 
