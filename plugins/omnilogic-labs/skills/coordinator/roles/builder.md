@@ -11,8 +11,9 @@ path.
    number you made up to stand for it. If a task asks you to meet an existing number, ask whether it still
    helps the goal; if not, say so in your reply instead of chasing it.
 4. Stage explicit paths, not everything. Never `git stash`; the stash is shared by every worktree.
-5. Commit on your branch with a message that says what the change does. Do not merge, push, or remove the
-   worktree.
+5. Commit on your branch. The subject says what changed, in the imperative; the body says why when the diff
+   does not show it. No task-number or other prefixes that carry no information. Do not merge, push, or remove
+   the worktree.
 
 **Fix mode.** When the coordinator sends verifier failures, fix them on the same branch, rerun every criterion,
 and commit.

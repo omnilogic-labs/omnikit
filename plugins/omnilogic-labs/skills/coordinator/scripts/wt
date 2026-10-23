@@ -111,7 +111,7 @@ cmd_list() {
 }
 
 cmd_merge() {
-  local name="$1" into="$BASE" branch target mb overlap
+  local name="$1" into="$BASE" branch target mb overlap first
   check_name "$name"
   shift
   if [ "${1:-}" = "--into" ]; then
@@ -131,7 +131,9 @@ cmd_merge() {
     printf '  %s\n' "$overlap" >&2
     die "refusing to merge; integrate these by hand or in a builder"
   fi
-  git -C "$target" merge --quiet --no-ff --no-edit "$branch" >&2
+  first="$(git -C "$MAIN" log --reverse --format=%s "$mb..$branch" | head -n 1)"
+  git -C "$target" merge --quiet --no-ff -m "Merge $name${first:+: $first}" \
+    -m "$(git -C "$MAIN" log --reverse --format='- %s' "$mb..$branch")" "$branch" >&2
   say "merged $branch into $into"
   git -C "$target" rev-parse HEAD
 }

@@ -67,7 +67,9 @@ models. Read hosts.md once at the start.
 
 1. **Plan.** If there is no plan, dispatch a planner with the goal. It writes the plan to a file and replies
    with the file path, the task list, and the waves. Record each task as `planned` in the ledger. Commit the
-   plan file and LEDGER.md to the base branch, and commit them again whenever they change.
+   plan file and LEDGER.md to the base branch. After that, keep LEDGER.md current on disk and commit it only
+   when a wave lands, at a milestone, and when you stop or finish, with a message that says what happened (for
+   example `Land wave 2: schema and design system; 05 blocked on a Gemini key`), not a bare state change.
 2. **Build.** For each task in the current wave whose dependencies are `merged`, up to max lanes at once:
    - create a worktree with `scripts/wt create <task>` (`scripts/` is relative to this SKILL.md's directory, not the repo root), which prints its path;
    - pick the tier the plan gives: fast for rote work, deep for anything complicated;
