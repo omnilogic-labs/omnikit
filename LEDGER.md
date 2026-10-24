@@ -8,13 +8,13 @@
 
 ## Tasks
 
-| Task                  | Depends on | State     | Branch/worktree                                        | Notes                                                                                         |
-| --------------------- | ---------- | --------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| rewrite-plain-writing | none       | verifying | wave/plain-writing; ../omnikit-worktrees/plain-writing | Commit 1739ff7; content/build checks passed; installation checks deferred to integrated main. |
+| Task                  | Depends on | State  | Branch/worktree                                        | Notes                                                                                                                  |
+| --------------------- | ---------- | ------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| rewrite-plain-writing | none       | merged | wave/plain-writing; ../omnikit-worktrees/plain-writing | Independent content checks PASS; judged goals MEETS; landed 00510ec; installed-link checks pending on integrated main. |
 
 ## Running workers
 
-- verifier: independent review being dispatched.
+- verifier: integrated milestone review being dispatched.
 
 ## Waves
 
