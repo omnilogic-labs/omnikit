@@ -8,19 +8,19 @@
 
 ## Tasks
 
-| Task | Depends on | State | Branch/worktree | Notes |
-| ---- | ---------- | ----- | --------------- | ----- |
-| rewrite-plain-writing | none | planned | pending | Research and acceptance criteria ready. |
+| Task                  | Depends on | State     | Branch/worktree                                        | Notes                                                                                         |
+| --------------------- | ---------- | --------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| rewrite-plain-writing | none       | verifying | wave/plain-writing; ../omnikit-worktrees/plain-writing | Commit 1739ff7; content/build checks passed; installation checks deferred to integrated main. |
 
 ## Running workers
 
-None.
+- verifier: independent review being dispatched.
 
 ## Waves
 
-| Wave | Tasks | Integration branch | Check | Base fast-forwarded to |
-| ---- | ----- | ------------------ | ----- | ---------------------- |
-| 1 | rewrite-plain-writing | pending | bun run verify | pending |
+| Wave | Tasks                 | Integration branch | Check          | Base fast-forwarded to |
+| ---- | --------------------- | ------------------ | -------------- | ---------------------- |
+| 1    | rewrite-plain-writing | pending            | bun run verify | pending                |
 
 ## Owner
 
