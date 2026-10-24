@@ -1,27 +1,35 @@
 # Ledger
 
-**Goal:** Rewrite plain-writing so general LLM responses are easy to understand, grounded in the supplied research.
+The coordinator's record of where the work stands. Only the coordinator edits it. Update it after every dispatch,
+report, merge and block, so a fresh context can resume from this file alone.
 
-**Plan:** plan/plain-writing.md.
+**Goal:** one sentence.
+
+**Plan:** path to the plan file.
 
 **Current wave:** 1
 
 ## Tasks
 
-| Task                  | Depends on | State  | Branch/worktree                                        | Notes                                                                                                                  |
-| --------------------- | ---------- | ------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| rewrite-plain-writing | none       | merged | wave/plain-writing; ../omnikit-worktrees/plain-writing | Independent content checks PASS; judged goals MEETS; landed 00510ec; installed-link checks pending on integrated main. |
+States: planned, building, verifying, fixing (round n), passed, merged, blocked.
+
+| Task | Depends on | State | Branch/worktree | Notes |
+| ---- | ---------- | ----- | --------------- | ----- |
+|      |            |       |                 |       |
+
+Notes hold the model used, the verify result in one line (for example `PASS 3/3; look CLOSE: sky too saturated`
+or `FAIL 2: check 4`), the landed commit, and anything the next wave needs.
 
 ## Running workers
 
-- verifier: integrated milestone review being dispatched.
+One line per live worker: role, task, model, and the id or name the host gave it. Remove the line when the worker
+reports. Check this list before dispatching, so no task gets two workers.
 
 ## Waves
 
-| Wave | Tasks                 | Integration branch | Check          | Base fast-forwarded to |
-| ---- | --------------------- | ------------------ | -------------- | ---------------------- |
-| 1    | rewrite-plain-writing | pending            | bun run verify | pending                |
+| Wave | Tasks | Integration branch | Check | Base fast-forwarded to |
+| ---- | ----- | ------------------ | ----- | ---------------------- |
 
 ## Owner
 
-None.
+Decisions and credentials only the owner can supply, one per line, with the task each one blocks.
