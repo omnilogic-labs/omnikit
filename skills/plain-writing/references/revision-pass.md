@@ -1,20 +1,47 @@
-# The revision pass
+# Revising for understanding
 
-Run this against every draft before delivering it. It takes a few minutes and
-catches most of what makes writing hard to read.
+Use this for a substantial draft or a passage that readers find difficult.
+Ordinary replies need only the brief check in the skill entrypoint. Focus the
+revision on the actual problem; a clear draft does not need a ritual rewrite.
 
-1. Read the first sentence of each paragraph on its own. Does each state the
-   paragraph's point? If not, move the point to the front.
-2. Search for em dashes and en dashes. Remove every one.
-3. Search for each pattern in patterns-to-avoid.md. Fix what you find.
-4. Find every term you invented or borrowed as a metaphor. Replace it with a
-   plain description, or define it at first use.
-5. Find every vague quantity. Replace it with a measurement, or say plainly that
-   it has not been measured.
-6. Split every sentence over about 30 words.
-7. Read the headings alone, in order. Do they tell the story of the document?
-8. Find every claim you cannot support. Either support it or label it as a
-   guess.
-9. Delete sentences that comment on the writing rather than the subject.
-10. Read the whole thing as a competent person who has not seen the work. Mark
-    anything that needs knowledge you did not supply, and supply it.
+## Check the reader's path
+
+Identify what the reader needs to understand or do. Can they find the answer,
+including qualifications that affect it? Does each part supply context,
+reasoning, or evidence they need? Move a conclusion earlier when that helps,
+but keep prerequisites where the reader needs them.
+
+Look for places where the reader must infer a relationship: an unfamiliar noun
+stack, a coined label, an unclear pronoun, an omitted connecting word, or a
+subject separated from its verb. Make the relationship explicit. Reorder or
+split a sentence when it asks the reader to hold too much unfinished material.
+Do not split solely because of its word count.
+
+Read transitions as reasoning. Does "therefore" express a supported inference?
+Does "because" identify an established cause or only a possible explanation?
+Keep separate facts connected without implying more than the evidence supports.
+
+## Compare meanings
+
+Check the revision against the original or source facts:
+
+- The same people and things perform the same actions.
+- Counts, units, dates, comparisons, and per-person or per-session scope agree.
+- Conditions, exceptions, and limits still apply to the right claims.
+- Observations remain observations; possible explanations remain possible.
+- No new example, measurement, cause, or guarantee has appeared as fact.
+
+If the original is ambiguous, preserve the ambiguity or flag it for resolution.
+Do not silently choose the interpretation that produces the smoothest sentence.
+
+## Read the result as a person
+
+Read the whole passage without relying on your memory of the work. Explain an
+unfamiliar term where it first matters. Remove repeated framing or conclusions
+when they add nothing; keep a restatement or example when it makes a difficult
+idea understandable.
+
+Check whether the structure helps the task. A short answer rarely needs the
+same sections as an investigation report. For a long document, useful headings
+and consistent labels can help readers find information without reading it all.
+Apply the project's style and punctuation conventions to authored text.

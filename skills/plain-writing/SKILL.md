@@ -1,10 +1,10 @@
 ---
 name: plain-writing
 description: >-
-  Rules and a revision pass for prose a reader understands first time:
-  docs, findings, status updates, summaries, decision records, commit messages,
-  PR text. Use when writing for another reader, or when asked to write
-  plainly, "make this clearer", "too verbose", "less jargon", "write this up".
+  Write and revise assistant responses and documents so people can understand
+  them on the first reading. Use for explanations, findings, updates, and
+  requests to make writing clearer, while preserving meaning, evidence,
+  uncertainty, and the reader's needed context.
 ---
 
 # plain-writing

@@ -1,201 +1,58 @@
-# Document shapes
+# Choosing a useful shape
 
-Contents: Findings or gap report; Words used in this file; How this was checked; What works; Where it falls short; What nobody has measured; Questions this leaves open; Status update; Decision record; What we decided; Why; What we gave up; What would make us revisit this; Bug report; Commit message; Pull request description; What this does; Why; How to check it; Anything a reviewer should know; README opening; Answering a question in chat.
+Use these starting points when a response needs more structure than connected
+paragraphs. Follow the requested format and project conventions. Include only
+parts that help the reader; these are not forms to fill in or required headings.
 
-Skeletons for the documents that come up most often. Each one exists so that a
-reader can find what they need without reading everything, and so that two
-documents of the same kind look the same.
+## An answer or explanation
 
-Use these as starting points, not as a form to fill in. Delete any section that
-would be empty rather than writing "N/A".
+Give the answer with its necessary qualification. Supply enough context to make
+it intelligible, then explain the mechanism or reasoning. A concrete example
+can help when the relationship is unfamiliar. End when the question is answered.
+Use steps when the reader needs to perform a sequence.
 
-## Findings or gap report
+## Findings from an investigation
 
-The document that says what was learned and what is still wrong. Written after
-an investigation, an audit, or a proof of concept.
+State the main finding and its practical consequence. Present the observations
+that support it, how they were obtained, and the limits of the investigation.
+Separate an observed failure from an inferred cause and a proposed remedy.
 
-```markdown
-# <What this is about>
+For several findings, consistent labels such as "Evidence" and "Effect" can
+help readers compare them. Define terms where they matter; a glossary is useful
+only when many unfamiliar terms need a shared reference. Include commands,
+versions, and locations when readers need to reproduce the result.
 
-<One paragraph: what this document covers, what it does not cover, and who it
-is for. Say explicitly what is out of scope, so absences do not read as
-oversights.>
+## A status update
 
-## Words used in this file
+Lead with the current outcome or anything requiring attention. Describe what
+changed, what remains, and any blocker or decision that affects the next step.
+Use a brief paragraph for a simple update, or parallel items for several
+independent work areas. Link supporting work when the reader needs to inspect it.
 
-<A table of any term the reader may not know. Skip this only if there are none.>
+## A decision record
 
-## How this was checked
+State the decision and whether it is proposed or accepted. Explain the reasons,
+relevant evidence, and tradeoffs. Record the date and the conditions that would
+justify revisiting it when the record must be useful later. Preserve the
+difference between an option considered and a choice actually made.
 
-<The machine, the version, the commit, the date. A table of each check, the
-exact command, and the result. A reader must be able to re-run it.>
+## A bug report
 
-## What works
+Describe what happened, what was expected, and how to reproduce the difference.
+Include relevant environment details and exact errors. Say what is known about
+frequency and affected users. Keep a suspected cause separate from the steps
+and observed behavior. Preserve error text verbatim.
 
-<Short. The gaps below only make sense against a baseline.>
+## A commit message or pull request description
 
-## Where it falls short
+Explain the concrete problem and resulting behavior. A commit subject can name
+the change in the imperative; use a body for reasons the diff does not reveal.
+For a pull request, include validation and any limitation a reviewer needs to
+assess. A simple change may need only a short paragraph and a check result.
+Follow the repository's template when it has one.
 
-### <A one-line statement of the problem>
+## A README opening
 
-**What happens.** <The observable behaviour, present tense.>
-
-**Evidence.** <Measurement, file and line, or command and output.>
-
-**Why it matters.** <The consequence for someone doing real work.>
-
-**Options.** <What could be done. Options, not decisions.>
-
-## What nobody has measured
-
-<A table: the thing not measured, and why it matters.>
-
-## Questions this leaves open
-
-<Numbered. One question each. No answers unless someone has actually decided.>
-```
-
-## Status update
-
-For a person who wants to know where things stand and whether they need to act.
-
-```markdown
-**Where it stands:** <one sentence, first>
-
-**Done since last time:** <bullets, each with a link or an identifier>
-
-**In progress:** <bullets, each with what it is waiting on>
-
-**Blocked, and on whom:** <bullets, or "nothing">
-
-**Decisions I need from you:** <numbered questions, or "none">
-```
-
-Put the blockers and the decisions where they cannot be missed. A status update
-whose only purpose is to ask a question should say so in the first line.
-
-## Decision record
-
-Written when a choice is made, so that nobody re-litigates it from memory.
-
-```markdown
-# <The decision, stated as a sentence>
-
-**Date:** <YYYY-MM-DD>
-**Status:** proposed | accepted | superseded by <link>
-
-## What we decided
-
-<One paragraph. State the decision, not the discussion.>
-
-## Why
-
-<The reasons, in order of weight. Include the measurements if there are any.>
-
-## What we gave up
-
-<The cost of the choice. Be honest and specific.>
-
-## What would make us revisit this
-
-<Concrete triggers: a measurement crossing a threshold, a dependency changing,
-a requirement arriving.>
-```
-
-## Bug report
-
-```markdown
-# <What is broken, in one line>
-
-**Environment:** <version, OS, commit>
-
-**What happens:** <observed behaviour>
-
-**What should happen:** <expected behaviour>
-
-**How to reproduce:**
-
-1. <exact command>
-2. <exact command>
-
-**Evidence:** <verbatim error text, log excerpt, or file and line>
-
-**Scope:** <who or what is affected, and how often>
-```
-
-Paste error text verbatim. Do not paraphrase an error message.
-
-## Commit message
-
-The subject line says what changed, in the imperative, under about 70
-characters. The body says why, and what a reader would otherwise have to
-reconstruct from the diff.
-
-```
-<Imperative summary of the change>
-
-<Why the change was needed. What was wrong before, or what was missing.>
-
-<What the change actually does, at the level of behaviour rather than
-line-by-line. Name the interesting decisions and anything surprising.>
-
-<Anything checked: tests run, measurements taken, things deliberately not
-done.>
-```
-
-Do not write a commit message that only restates the diff. A reader can see the
-diff. They cannot see why.
-
-## Pull request description
-
-```markdown
-## What this does
-
-<One paragraph, first sentence is the summary.>
-
-## Why
-
-<The problem this solves. Link the issue if there is one.>
-
-## How to check it
-
-<Exact commands, and what the reviewer should see.>
-
-## Anything a reviewer should know
-
-<Trade-offs, things deliberately left out, parts you are unsure about.>
-```
-
-Naming the parts you are unsure about gets them reviewed. Hiding them does not
-make them safer.
-
-## README opening
-
-The first paragraph of a README is the most-read prose in a project. It should
-answer three questions before any heading:
-
-1. What is this?
-2. Who is it for?
-3. What state is it in?
-
-```markdown
-# <name>
-
-<One sentence: what it does, in the plainest possible words.>
-
-<One paragraph: what problem it solves and who has that problem.>
-
-<One sentence on its state: production, experimental, reference only,
-abandoned. Do not make the reader infer this from the commit history.>
-```
-
-## Answering a question in chat
-
-Not a document, but the same rules apply and it is where they are most often
-dropped.
-
-- First line answers the question. Yes, no, the number, or the name.
-- Then the evidence or the reasoning.
-- Then anything the person did not ask but needs to know.
-- If you did not do part of what was asked, say so explicitly, near the top.
-- If you are guessing, say so in the same sentence as the guess.
+Say what the project does and who can use it. Give the context needed to decide
+whether to continue reading. Mention its maturity or limitations when they
+affect that choice, then lead into the relevant setup or usage instructions.

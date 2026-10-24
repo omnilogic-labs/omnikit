@@ -1,132 +1,88 @@
-# plain-writing
+# Plain writing
 
-Fluent writing sounds good read aloud. Clear writing puts a fact in the
-reader's head with the least effort. When the two conflict, choose clear. The
-usual failures are delaying the point for effect, inventing vocabulary,
-replacing specifics with abstractions, and compressing an idea until only the
-author can unpack it.
+Help the reader understand the answer without reconstructing missing reasoning
+or decoding private vocabulary. A clear answer may need more words
+than a compressed one. Remove work for the reader, not information they need.
 
-## When to use this
+Apply this to ordinary replies as well as longer documents. Match the reader's
+knowledge, purpose, and requested level of detail. Follow explicit formats and
+project instructions. Preserve quoted text and deliberate voice; do not turn a
+request for clarity into an unsolicited change of style or scope.
 
-Use it for any document a person will read to make a decision or do work:
-reports, findings, handovers, runbooks, README files, status updates, commit
-messages, pull request descriptions, review comments, incident notes, and
-answers to questions in chat.
+## Answer, then explain what the reader needs
 
-Do not use it to rewrite quoted material, to reformat someone else's prose
-without being asked, or to flatten writing where voice is the point.
+Put the answer or most useful finding near the start. Include any qualification
+needed to understand it correctly. When the answer depends on context, supply
+that context before asking the reader to accept the conclusion.
 
-## The rule everything else follows
+Develop the explanation in the order the reader needs it: name the things
+involved, show how they relate, then explain the consequence. Keep necessary
+causal steps, evidence, and examples. Do not make every sentence or paragraph
+follow the same pattern.
 
-**Put the claim first, then support it.**
+Distinguish observations, interpretations, and open questions. Preserve the
+strength of the evidence: "suggests" must not become "proves", and "in these
+tests" must not become "always". Do not invent measurements, causes, or actors
+to make a rewrite sound concrete.
 
-A paragraph opens with the thing you want the reader to know. Everything after
-it is evidence, qualification, or consequence. If a paragraph only makes sense
-once you reach the last sentence, move that sentence to the front and rewrite
-what is left.
+## Make relationships easy to see
 
-The same applies at every scale: the document opens with its conclusion, each
-section opens with its finding, each sentence opens with its subject.
+- **Choose familiar, accurate wording.** An unusual word combination or coined
+  label can make an ordinary idea harder to recognize. Use an established term
+  when it helps; explain it in context if the reader may not know it. Keep
+  distinctions that matter to the task.
+- **Open up unfamiliar noun stacks.** In "account recovery request limit", the
+  reader has to guess which words belong together. "The limit on requests to
+  recover an account" makes the relationship visible. Familiar technical terms
+  can stay intact when the audience understands them.
+- **Keep related words close.** A reader should not have to hold a subject in
+  memory through several qualifications before reaching its verb. Move an
+  interruption, reorder the sentence, or split it while keeping the connection
+  between the resulting sentences explicit.
+- **Keep connecting words when they help.** Adding "that", "which", "because",
+  or "by" can show who did what or why one fact follows from another. Read for
+  ambiguity, not for the fewest words. Some constructions need a fuller rewrite.
+- **Use actions the reader can interpret.** An unfamiliar verb made from a noun
+  may hide the intended action. "Put it on the calendar" can be clearer than
+  "calendar it". Conventional verbs such as "email" need no automatic rewrite.
+- **Name literal actors and effects when a metaphor obscures them.** "The
+  deadline wants a smaller design" leaves the decision implicit. Say who needs
+  to reduce the design and why, if those facts are known. Ordinary expressions
+  such as "the server returns an error" are useful and can remain.
 
-Bad, because the point arrives last:
+These are editorial choices informed by research on processing difficulty, not
+universal bans on grammatical forms. For examples, read
+[rewrites](references/rewrites.md). For what the study found and what it does
+not establish, read the [research note](references/research.md).
 
-> Across five runs the queue peaked between 193 KB and 262 KB, against a 256 KB
-> limit, which suggests the failure is caused by the machine rather than the
-> code.
+## Use structure in proportion to the answer
 
-Good, because the point arrives first:
+A short reply may need only a direct answer and its explanation. Use paragraphs
+to develop connected ideas, steps for a sequence, a list for parallel items,
+and a table when comparison becomes easier. Add headings when they help a
+reader find material in a longer response. Do not add a glossary, summary, or
+document skeleton by default.
 
-> The failure is caused by the machine, not the code. Across five runs the queue
-> peaked between 193 KB and 262 KB against a 256 KB limit.
+Keep sentences manageable by reducing what the reader must track at once.
+There is no sentence-length target. A longer sentence can make a relationship
+clearer than several disconnected fragments.
 
-## Ten rules
+Local punctuation convention: do not introduce em dashes or en dashes in
+authored prose. Use punctuation that fits the relationship. This convention is
+separate from the research; preserve exact quotations and required syntax.
 
-1. **Lead with the claim.** See above. This is the one that matters most.
-2. **Use the plainest accurate word.** Prefer "use" to "leverage", "show" to
-   "surface", "start" to "spin up". If a plainer word loses meaning, keep the
-   precise one and define it.
-3. **Define any term the reader may not know, the first time you use it, in
-   ordinary words.** A glossary at the top of a long document is cheap and saves
-   the reader from guessing.
-4. **Do not invent names for things.** If a standard name exists, use it. If
-   none exists, describe the thing rather than coining a label the reader has to
-   memorise. A private vocabulary makes the writer feel precise and makes the
-   reader feel excluded.
-5. **Prefer specifics to abstractions.** Give the number, the file path, the
-   command, the date, the exact error text. "Slow" is an opinion. "15.6 ms
-   against 60 microseconds" is a fact the reader can act on.
-6. **One idea per sentence.** Most sentences should be under 25 words. Split any
-   sentence over about 30 words unless the length is doing real work.
-7. **Say what you do not know.** Mark guesses as guesses, unmeasured things as
-   unmeasured, and opinions as opinions. A document that admits its gaps is
-   trusted on the rest.
-8. **Direct does not mean short.** Explain the reasoning in full. What to cut is
-   the editorialising: the throat-clearing, the restatement, the commentary on
-   how interesting the finding is.
-9. **Do not presume shared context.** Write for a competent reader who has not
-   been following along. Name the thing before referring to it.
-10. **Fit the shape to the content.** Do not apply the same skeleton (opening
-    restatement, three bullets, a twist, a closing line) to every document.
+## Check understanding and meaning before sending
 
-## Punctuation and formatting
+Read once as the intended reader. Is the answer easy to find? Can they tell who
+did what, what each term refers to, and how the explanation supports the answer?
+Supply missing context or connections where needed.
 
-- **Never use em dashes or en dashes.** Use a comma, a colon, a semicolon,
-  brackets, or two sentences. Most asides should be a sentence of their own or
-  be deleted.
-- **Use full stops generously.** Two clear sentences beat one balanced one.
-- **Bold at most one phrase per paragraph.**
-- **Use a table when three or more items share the same shape.** Use a list when
-  they do not.
-- **Use headings that state the content**, so the headings alone summarise the
-  document.
+Compare with the facts or original text. Check actors, quantities, conditions,
+causal relationships, scope, and uncertainty. Remove repetition that adds no
+help, while keeping useful explanation. For a substantial revision, use the
+[revision pass](references/revision-pass.md).
 
-## Structure that helps
-
-For a document that reports findings, give every item the same shape so a
-reader can skim to the part they need:
-
-```
-### <A one-line statement of the problem>
-
-**What happens.** The observable behaviour, in the present tense.
-
-**Evidence.** The measurement, the file and line, or the command and its output.
-
-**Why it matters.** The consequence for someone doing real work.
-
-**Options.** What could be done. Written as options, not decisions, unless the
-decision has actually been made.
-```
-
-## Before delivering
-
-Run the revision pass in `references/revision-pass.md` on every draft. Search
-for the phrases in `references/patterns-to-avoid.md` (borrowed metaphors,
-"it turns out", "not X but Y", "simply", stacked hedges, summarising closers).
-When the reader may be another agent or a future session, also apply
-`references/machine-readers.md` (absolute dates, full paths, fixed status words).
-
-## Do not overcorrect
-
-- **Losing the reasoning.** If a conclusion depends on three measurements, give
-  all three. Brevity that removes the evidence is worse than the original.
-- **Flattening real distinctions.** Precise technical terms are not jargon. Keep
-  them and define them.
-- **Removing all structure.** A document with no headings, no tables and no
-  shape is hard to use even when every sentence is plain.
-
-## When a project has its own style guide
-
-Follow the project's guide first, and use this skill for whatever it does not
-cover. Check `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, or a README style
-section before writing. Where they conflict, the project wins.
-
-## References
-
-- `references/patterns-to-avoid.md`: phrases to search for, with replacements.
-- `references/revision-pass.md`: the ten-step check to run on every draft.
-- `references/machine-readers.md`: extra rules for text read by agents or indexes.
-- `references/rewrites.md`: before and after pairs, with the reason for each.
-- `references/document-shapes.md`: skeletons for status updates, decision
-  records, bug reports, commit messages, pull request descriptions, README
-  openings.
+Read other references only when useful: [patterns](references/patterns-to-avoid.md)
+for recurring prose problems, [document shapes](references/document-shapes.md)
+for longer work, and [machine readers](references/machine-readers.md) for text
+that must also survive handoffs or automated use.
