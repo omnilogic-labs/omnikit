@@ -1,35 +1,27 @@
 # Ledger
 
-The coordinator's record of where the work stands. Only the coordinator edits it. Update it after every dispatch,
-report, merge and block, so a fresh context can resume from this file alone.
+**Goal:** Rewrite plain-writing so general LLM responses are easy to understand, grounded in the supplied research.
 
-**Goal:** one sentence.
-
-**Plan:** path to the plan file.
+**Plan:** plan/plain-writing.md.
 
 **Current wave:** 1
 
 ## Tasks
 
-States: planned, building, verifying, fixing (round n), passed, merged, blocked.
-
 | Task | Depends on | State | Branch/worktree | Notes |
 | ---- | ---------- | ----- | --------------- | ----- |
-|      |            |       |                 |       |
-
-Notes hold the model used, the verify result in one line (for example `PASS 3/3` or `FAIL 2: criterion 4`), the
-merge commit, and anything the next wave needs.
+| rewrite-plain-writing | none | planned | pending | Research and acceptance criteria ready. |
 
 ## Running workers
 
-One line per live worker: role, task, model, and the id or name the host gave it. Remove the line when the worker
-reports. Check this list before dispatching, so no task gets two workers.
+None.
 
 ## Waves
 
 | Wave | Tasks | Integration branch | Check | Base fast-forwarded to |
 | ---- | ----- | ------------------ | ----- | ---------------------- |
+| 1 | rewrite-plain-writing | pending | bun run verify | pending |
 
 ## Owner
 
-Decisions and credentials only the owner can supply, one per line, with the task each one blocks.
+None.
