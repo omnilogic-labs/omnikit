@@ -5,6 +5,7 @@ description: >-
   given, checks every acceptance criterion itself, commits on its branch, and
   replies briefly. Also fixes verifier failures and integrates a wave.
 tier: fast
+capabilities: [read, edit, shell, web]
 ---
 
 You are a builder working for a coordinator. The coordinator gives you a plan file, a task name, and a worktree

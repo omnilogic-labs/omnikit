@@ -46,10 +46,14 @@ describe("vars", () => {
     expect(ok("{{tier.deep}} {{effort.deep}} {{effort.fast}}", "codex")).toBe(
       "gpt-6.1-sol high medium"
     );
-    expect(ok("{{tier.deep}} {{cli.fast}}", "agy")).toBe("pro gemini-3.8-flash-medium");
+    expect(ok("{{tier.deep}} {{cli.fast}}", "agy")).toBe("inherit gemini-3.8-flash-medium");
     expect(ok("{{tool.agent}} {{tool.agentType}}", "claude")).toBe("Agent subagent_type");
     expect(ok("{{tool.agent}}", "codex")).toBe("spawn_agent");
-    expect(ok("{{tool.agent}}", "agy")).toBe("invoke_subagent");
+    expect(ok("{{tool.agent}} {{tool.message}} {{tool.selfType}} {{runner.model}}", "agy")).toBe(
+      "invoke_subagent send_message self flash_lite"
+    );
+    expect(ok("{{review.model}} {{review.effort}}", "codex")).toBe("gpt-6.1-sol xhigh");
+    expect(ok("{{review.model}}", "agy")).toBe("gemini-4-argon-high");
     expect(ok("{{host.name}} {{agents.dir}}", "agy")).toBe("agy ../../agents");
     expect(ok("{{ tier.deep }}", "claude")).toBe("opus");
   });
@@ -58,7 +62,7 @@ describe("vars", () => {
     for (const h of HOST_NAMES) {
       expect(
         ok("{{claude.tier.deep}}|{{codex.tier.fast}}|{{codex.effort.deep}}|{{agy.cli.deep}}", h)
-      ).toBe("opus|gpt-6-luna|high|gemini-3.1-pro-high");
+      ).toBe("opus|gpt-6-luna|high|gemini-4-argon-high");
     }
   });
 });
@@ -514,9 +518,32 @@ describe("agents", () => {
     const agyBuilder = get("dist/agy/agents/builder.md")!;
     expect(agyBuilder).toContain("model: inherit\n");
     expect(agyBuilder).not.toContain("effort:");
-    expect(get("dist/agy/agents/planner.md")).toContain("model: pro\n");
-    expect(get("dist/agy/agents/planner.md")).not.toContain("`Agent`");
+    expect(agyBuilder).not.toContain("capabilities:");
+    expect(agyBuilder).toContain("tools:\n  - view_file\n");
+    expect(agyBuilder).toContain("  - run_command\n");
+    expect(agyBuilder).toContain("  - send_message\n");
+    expect(agyBuilder).not.toContain("write_to_file");
+    expect(agyBuilder).not.toContain("search_web");
+    const agyPlanner = get("dist/agy/agents/planner.md")!;
+    expect(agyPlanner).toContain("model: inherit\n");
+    expect(agyPlanner).toContain("  - write_to_file\n");
+    expect(agyPlanner).toContain("  - search_web\n");
+    expect(agyPlanner).not.toContain("`Agent`");
     expect(get("dist/codex/agents/builder.toml")).toContain('model = "gpt-6-luna"');
+  });
+
+  test("bad capabilities: in a source is rejected", () => {
+    for (const bad of ["capabilities: []", "capabilities: [read, fly]"]) {
+      const errors: RenderError[] = [];
+      emitAgent(
+        "x",
+        `---\nname: x\ndescription: d\ntier: fast\n${bad}\n---\n\nb\n`,
+        "x.md",
+        HOSTS.agy,
+        errors
+      );
+      expect(errors[0]).toMatchObject({ file: "x.md", line: 5 });
+    }
   });
 
   test("model: in a source is rejected", () => {

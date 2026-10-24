@@ -17,7 +17,16 @@ import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "n
 import { platform, tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
 import * as prettier from "prettier";
-import { HOSTS, HOST_NAMES, type Host, type HostName, type Tier, varsFor } from "./hosts";
+import {
+  CAPABILITIES,
+  HOSTS,
+  HOST_NAMES,
+  type Capability,
+  type Host,
+  type HostName,
+  type Tier,
+  varsFor,
+} from "./hosts";
 import {
   OS_TARGETS,
   type OsName,
@@ -40,7 +49,7 @@ import {
 const REPO_ROOT = join(import.meta.dir, "..", "..");
 const SKIP_DIRS = new Set(["node_modules", ".git"]);
 const CLAUDE_ONLY_KEYS = new Set(["effort", "tools", "skills"]);
-const SOURCE_ONLY_KEYS = new Set(["tier", "models", "hosts"]);
+const SOURCE_ONLY_KEYS = new Set(["tier", "models", "hosts", "capabilities"]);
 
 export interface OutFile {
   data: string | Uint8Array;
@@ -152,6 +161,7 @@ interface AgentMeta {
   tier: Tier;
   models: Partial<Record<HostName, string>>;
   hosts: HostName[];
+  capabilities: Capability[];
 }
 
 function parseAgentMeta(
@@ -196,17 +206,38 @@ function parseAgentMeta(
   for (const h of hosts) {
     if (!HOST_NAMES.includes(h as HostName)) return bad("hosts", `unknown host "${h}" in hosts`);
   }
+  // No list means every capability, as a Claude agent without tools: gets every tool.
+  const caps = (raw.capabilities ?? [...CAPABILITIES]) as unknown;
+  if (!Array.isArray(caps) || caps.length === 0) {
+    return bad(
+      "capabilities",
+      `capabilities must be a non-empty list of ${CAPABILITIES.join(", ")}`
+    );
+  }
+  for (const c of caps) {
+    if (!CAPABILITIES.includes(c as Capability)) {
+      return bad("capabilities", `unknown capability "${c}"; use ${CAPABILITIES.join(", ")}`);
+    }
+  }
   return {
     name: raw.name,
     description: raw.description,
     tier: raw.tier,
     models: models as Partial<Record<HostName, string>>,
     hosts: hosts as HostName[],
+    capabilities: caps as Capability[],
   };
 }
 
 function trimLeadingBlank(s: string): string {
   return s.replace(/^(\s*\r?\n)+/, "");
+}
+
+/** The host's tool names for these capabilities, plus its base tools; null if it has no toolsets. */
+export function agentTools(host: Host, capabilities: Capability[]): string[] | null {
+  if (!host.toolsets) return null;
+  const names = [...capabilities.flatMap((c) => host.toolsets![c]), ...(host.baseTools ?? [])];
+  return [...new Set(names)];
 }
 
 /** Emit one agent for one host. Returns the files keyed by output path. */
@@ -272,11 +303,14 @@ export function emitAgent(
     return out;
   }
 
-  // agy: markdown with name, description (as written in the source) and a pro|flash|inherit model.
+  // agy: markdown with name, description (as written in the source), a pro|flash|inherit model
+  // and the tool allowlist for the agent's capabilities (agy gives an agent no tools by default).
   const keep = fm.blocks.filter(
     (b) => !SOURCE_ONLY_KEYS.has(b.key) && !CLAUDE_ONLY_KEYS.has(b.key)
   );
   const blocks = [...keep, { key: "model", lines: [`model: ${model}\n`] }];
+  const tools = agentTools(host, meta.capabilities);
+  if (tools) blocks.push({ key: "tools", lines: ["tools:\n", ...tools.map((t) => `  - ${t}\n`)] });
   out.set(`${base}.md`, { data: joinFrontmatter({ ...fm, blocks }), mode });
   return out;
 }

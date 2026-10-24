@@ -58,8 +58,8 @@ On Codex, dispatch the installed custom agent by name with `{{tool.agent}}`, or 
 
 <!-- @if agy -->
 
-On Antigravity, dispatch the installed agent by name with `{{tool.agent}}` (`TypeName`), or paste the role file's
-body. Deep is `{{tier.deep}}` and fast is `{{tier.fast}}`.
+On Antigravity, dispatch the installed agent by name with `{{tool.agent}}` (`TypeName`) and `Model: "{{tier.deep}}"`
+(both tiers inherit the session's model unless the owner says otherwise), or paste the role file's body.
 
 <!-- @endif -->
 

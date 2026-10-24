@@ -21,9 +21,12 @@ Not used by default: Claude `{{claude.alt.stronger}}` (more capable than `{{clau
 - Claude Code: the `model` on the Agent call, and the `model:` line in each `agents/<role>.md` (planner `{{claude.tier.deep}}`;
   builder and verifier `{{claude.tier.fast}}`). Keep those lines in step with this table.
 - Codex: `codex exec -m <model> -c model_reasoning_effort=<effort>`, or the `model` and `effort` fields of the
-  `external_worker` tool.
-- agy: `agy --model <model>`, or the `model` field of the `external_worker` tool. `agy models` lists what the
-  account has. An agy subagent file's `model:` field takes only `pro`, `flash` or `inherit`: use
-  `pro` for deep and `flash` for fast there.
+  `external_worker` tool (external reviews use `{{codex.review.model}}` at effort `{{codex.review.effort}}`).
+- agy: `agy --model <model>`, or the `model` field of the `external_worker` tool. The CLI model slugs already pin the
+  reasoning effort, so never pass `--effort` with them. `agy models` lists what the account has. An agy subagent
+  file's `model:` field (and `{{agy.tool.agent}}`'s `Model`) takes only `inherit`, `{{agy.runner.model}}`, `flash` or
+  `pro`; because `pro` and `flash` are unnamed Gemini models, agent files and worker dispatches use `{{agy.tier.deep}}`
+  for both tiers so the parent session's model decides, and `{{agy.runner.model}}` for a subagent that only runs a CLI
+  command.
 
-Last checked 2026-10-08 against `agy models` and Codex's model list.
+Last checked 2026-10-23 against `agy models` and Codex's model list.

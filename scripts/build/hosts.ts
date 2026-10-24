@@ -4,6 +4,10 @@
 export type HostName = "claude" | "codex" | "agy";
 export type Tier = "deep" | "fast";
 
+/** What an agent may do. Each host maps these to its own tool names. */
+export const CAPABILITIES = ["read", "edit", "shell", "web"] as const;
+export type Capability = (typeof CAPABILITIES)[number];
+
 export interface Host {
   name: HostName;
   /** Display name for prose. */
@@ -18,6 +22,18 @@ export interface Host {
   cli: Record<Tier, string>;
   /** Dispatch tool names, read as {{tool.<key>}}. */
   tool: Record<string, string>;
+  /**
+   * Agent tool allowlist per capability. An agent source lists capabilities (`capabilities:`) and
+   * this host's agent file gets `tools:` with every name they map to, plus `baseTools`. Unset means
+   * the host's agent files carry no tool list.
+   */
+  toolsets?: Record<Capability, string[]>;
+  /** Tools every agent file on this host gets, whatever its capabilities. */
+  baseTools?: string[];
+  /** Model and effort for a one-shot external review through the host's CLI, read as {{review.*}}. */
+  review?: { model: string; effort?: string };
+  /** Model for a subagent whose only job is to run one CLI command, read as {{runner.model}}. */
+  runner?: string;
   /** Other models the host has but we do not use by default, read as {{alt.<key>}}. */
   alt?: Record<string, string>;
   /** Output root for this host's skills/ and agents/, relative to the build out dir. */
@@ -54,6 +70,7 @@ export const HOSTS: Record<HostName, Host> = {
     tier: { deep: "gpt-6.1-sol", fast: "gpt-6-luna" },
     effort: { deep: "high", fast: "medium" },
     cli: { deep: "gpt-6.1-sol", fast: "gpt-6-luna" },
+    review: { model: "gpt-6.1-sol", effort: "xhigh" },
     alt: { frontier: "gpt-6-astra" },
     tool: { agent: "spawn_agent" },
     root: "dist/codex",
@@ -63,10 +80,26 @@ export const HOSTS: Record<HostName, Host> = {
   agy: {
     name: "agy",
     label: "Antigravity (agy)",
-    tier: { deep: "pro", fast: "flash" },
+    // The agent file tiers pro and flash are unnamed Gemini models, so agents inherit the
+    // parent's model and the owner's choice of main model decides.
+    tier: { deep: "inherit", fast: "inherit" },
     allowedModels: ["pro", "flash", "inherit"],
-    cli: { deep: "gemini-3.1-pro-high", fast: "gemini-3.8-flash-medium" },
-    tool: { agent: "invoke_subagent" },
+    // CLI slugs pin the effort level, so never pass --effort with them.
+    cli: { deep: "gemini-4-argon-high", fast: "gemini-3.8-flash-medium" },
+    review: { model: "gemini-4-argon-high" },
+    tool: { agent: "invoke_subagent", message: "send_message", selfType: "self" },
+    runner: "flash_lite",
+    // agy's internal tool names, checked 2026-10-23 with agy 1.4.6 by running a subagent with each
+    // list. An unknown name fails the whole agent ("tool not found in registry"). Not in the
+    // registry: codebase_search, command_status, send_command_input, read_terminal,
+    // view_content_chunk, browser_subagent.
+    toolsets: {
+      read: ["view_file", "list_dir", "grep_search", "find_by_name"],
+      edit: ["write_to_file", "replace_file_content"],
+      shell: ["run_command"],
+      web: ["search_web", "read_url_content"],
+    },
+    baseTools: ["send_message", "manage_task", "schedule"],
     root: "dist/agy",
     agentFormat: "agy-md",
     skillFrontmatterKeys: null,
@@ -92,6 +125,11 @@ function ownVars(h: Host): Record<string, string> {
   }
   for (const [k, name] of Object.entries(h.tool)) v[`tool.${k}`] = name;
   for (const [k, name] of Object.entries(h.alt ?? {})) v[`alt.${k}`] = name;
+  if (h.runner) v["runner.model"] = h.runner;
+  if (h.review) {
+    v["review.model"] = h.review.model;
+    if (h.review.effort) v["review.effort"] = h.review.effort;
+  }
   return v;
 }
 
