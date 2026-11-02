@@ -188,7 +188,10 @@ parse_plan() {
     out == "" { print >> (dir "/preamble.md"); next }
     {
       print >> out
-      line = $0; sub(/^[[:space:]]*[-*][[:space:]]*/, "", line)
+      line = $0; sub(/^[[:space:]]*[-*][[:space:]]+/, "", line)
+      if (line ~ /^(Goal|Wave|Tier|Depends on):/) {
+        printf "ledger: plan line %d is a task field without bold markers (write **%s**): %s\n", NR, substr(line, 1, index(line, ":")), $0 >> (dir "/errors.txt")
+      }
       if (line ~ /^\*\*Goal:\*\*/ && goal == "") goal = field(line)
       else if (line ~ /^\*\*Wave:\*\*/) wave = field(line)
       else if (line ~ /^\*\*Tier:\*\*/) { tier = field(line); sub(/[^a-z].*/, "", tier) }
@@ -198,6 +201,10 @@ parse_plan() {
       }
     }
     END { flush() }' "$1"
+  if [ -s "$2/errors.txt" ]; then
+    cat "$2/errors.txt" >&2
+    exit 1
+  fi
   touch "$2/tasks.tsv" "$2/preamble.md"
 }
 
@@ -239,6 +246,7 @@ task_number() {
   case "$1" in
     '') usage ;;
     \#*) echo "${1#\#}" ;;
+    run) run_number ;;
     *[!0-9]*)
       local n
       n="$(subissues "$(run_number)" | awk -F'\t' -v t="$1" '$3 == t { print $1; exit }')"
@@ -300,7 +308,15 @@ gh_init() {
   mkdir -p "$MAIN/.agents"
   exclude "$PLAN_DIR/"
   run_body "$1" | quiet > "$TMP/body.md"
-  local url
+  local url n
+  # Idempotent: reuse an open run with the same title instead of opening a second.
+  n="$(gh issue list -R "$REPO" --label run --state open --limit 50 --json number,title \
+    --jq '.[] | "\(.number)\t\(.title)"' 2> /dev/null | awk -F'\t' -v t="Run: $1" '$2 == t { print $1; exit }')" || true
+  if [ -n "$n" ]; then
+    say "run #$n is already open for this goal; reusing it"
+    echo "$n"
+    return 0
+  fi
   url="$(gh issue create -R "$REPO" --title "Run: $1" --label run --body-file "$TMP/body.md")"
   say "opened run $url"
   echo "${url##*/}"
@@ -506,9 +522,9 @@ gh_status() {
     | [$t[] | select(.s != "merged" and .s != "dropped")] as $open
     | "Run #\($r.number): \($r.title | ltrimstr("Run: "))",
       "Now:",
-      (($r.body | capture("<!-- ledger:now -->\n(?P<x>(?s:.*?))\n<!-- /ledger:now -->").x // "")
+      (($r.body | capture("<!-- ledger:now -->\n(?<x>(?s:.*?))\n<!-- /ledger:now -->").x // "")
         | split("\n") | map(select(length > 0))[:8][] | "  " + .),
-      "Wave now: \([$open[] | lbl("wave:")[0] // empty] | sort | .[0] // "-")",
+      "Wave now: \([$open[] | lbl("wave:")[0] // empty] | sort_by(capture("^(?<p>[^0-9]*)(?<n>[0-9]*)(?<s>.*)$") | [.p, (.n | tonumber? // 0), .s]) | .[0] // "-")",
       (["building", "verifying", "fixing", "passed"][] as $s
         | [$open[] | select(.s == $s)] | select(length > 0)
         | "\($s): " + (map(ref + (lbl("round:")[0] // "" | if . == "" then "" else " (round \(.))" end)) | join(", "))),
@@ -518,7 +534,7 @@ gh_status() {
           ([$p[] | select(any(.blockedBy.nodes[]; .state != "CLOSED"))] | select(length > 0)
             | "waiting: " + (map(ref) | join(", ")))),
       ($open[] | select(.s == "blocked")
-        | "blocked: \(ref): \((.comments.nodes[-1].body // "no reason recorded") | split("\n") | map(select(length > 0))[0][:120])"),
+        | "blocked: \(ref): \((.comments.nodes[-1].body // "no reason recorded") | split("\n") | map(select(length > 0)) | (map(select(test("^(#+ |\\*\\*[^*]*\\*\\*:?$)") | not))[0] // .[0] // "no reason recorded")[:120])"),
       "merged: \([$t[] | select(.s == "merged")] | length), dropped: \([$t[] | select(.s == "dropped")] | length), open: \($open | length)",
       ($t[] | . as $i | .comments.nodes[] | select(.body | startswith("**Verify"))
         | .body | split("\n")[] | select(test("\\bCLOSE\\b")) | "CLOSE \($i | ref): \(.[:120])"),

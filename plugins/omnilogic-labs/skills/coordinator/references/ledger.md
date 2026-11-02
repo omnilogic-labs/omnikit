@@ -103,5 +103,5 @@ work from your own context until it is back. `Ledger: file` runs the whole loop 
 The planner writes the plan into the plan dir (default `.agents/plans/`, kept out of git). Each task is a
 `## Task: <name>` section with `**Goal:**`, `**Files:**`, `**Steps:**`, `**Tier:**`, `**Wave:**`,
 `**Depends on:**` and the acceptance criteria; `import` reads the goal, tier, wave and dependencies from those
-lines. A plan file can be deleted once imported on GitHub; in file mode it is the task text, so keep it until the
+lines, with or without a leading `- `; a field line missing its bold markers fails the import and names the line. `init` reuses an open run with the same title. A plan file can be deleted once imported on GitHub; in file mode it is the task text, so keep it until the
 run finishes.
