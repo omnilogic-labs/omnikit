@@ -4,8 +4,9 @@ The role prompts are in this skill's folder: `roles/planner.md`, `roles/builder.
 holds the role's prompt body, with no frontmatter.
 
 Every dispatch prompt names two things: the task reference that `scripts/ledger ref <task>` prints (an issue,
-`owner/repo#n`, which the worker reads with `gh issue view`; or in file mode `<plan path>#<task>`) and the worktree
-path. Ask for a reply of ten lines or fewer.
+`owner/repo#n`, which the worker reads itself with `gh issue view <n> -R <owner/repo> --json title,body --jq
+'.title, .body'`; or in file mode `<plan path>#<task>`) and the worktree path. Never paste the plan text. Ask for a
+reply of ten lines or fewer, also saved to the worktree's `ledger-reply.md` (`ledger.md`, Writing cheaply).
 
 | Role     | Tier                                                  |
 | -------- | ----------------------------------------------------- |
@@ -26,6 +27,13 @@ path. Ask for a reply of ten lines or fewer.
 - Without spawn tools, run a worker as a separate process from inside the worktree:
   `codex exec -C <worktree> --dangerously-bypass-approvals-and-sandbox -m <model> "<role prompt + task>"`.
 - Do not use Codex's own worktree mode. Builders work in the worktree `scripts/wt` made.
+
+## The index reader
+
+The reader that keeps `ledger index` current (`ledger.md`, Reading cheaply) needs no judgement, so it runs on the
+host's lightest model:
+
+- Codex: a default agent on `gpt-6-luna` at effort `medium`.
 
 ## No subagents
 

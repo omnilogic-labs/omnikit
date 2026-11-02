@@ -4,8 +4,9 @@ The role prompts are in this skill's folder: `roles/planner.md`, `roles/builder.
 holds the role's prompt body, with no frontmatter.
 
 Every dispatch prompt names two things: the task reference that `scripts/ledger ref <task>` prints (an issue,
-`owner/repo#n`, which the worker reads with `gh issue view`; or in file mode `<plan path>#<task>`) and the worktree
-path. Ask for a reply of ten lines or fewer.
+`owner/repo#n`, which the worker reads itself with `gh issue view <n> -R <owner/repo> --json title,body --jq
+'.title, .body'`; or in file mode `<plan path>#<task>`) and the worktree path. Never paste the plan text. Ask for a
+reply of ten lines or fewer, also saved to the worktree's `ledger-reply.md` (`ledger.md`, Writing cheaply).
 
 | Role     | Tier                                                  |
 | -------- | ----------------------------------------------------- |
@@ -34,6 +35,13 @@ path. Ask for a reply of ten lines or fewer.
   `codex exec -m gpt-6.1-sol -c model_reasoning_effort=xhigh -s read-only -C <worktree> "<prompt>" > <out>`),
   wait for it to finish, save the output to a file, and return the file path and exit code. Never pass `--effort` to
   `agy` when the model slug already pins the effort level.
+
+## The index reader
+
+The reader that keeps `ledger index` current (`ledger.md`, Reading cheaply) needs no judgement, so it runs on the
+host's lightest model:
+
+- Antigravity: a `self` agent with `Model: "flash_lite"`.
 
 ## No subagents
 

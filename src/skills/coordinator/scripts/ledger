@@ -11,7 +11,9 @@ set -e
 #   ledger state <task> <state> [--round N]
 #                                    planned building verifying fixing passed
 #                                    blocked merged dropped
-#   ledger note <task|run> <file|-> [--head TEXT]   a result, as a comment
+#   ledger note <task|run> <file|-|--from WORKTREE> [--head TEXT]
+#                                    a result, as a comment; --from posts the
+#                                    reply the worker saved, then moves it aside
 #   ledger ruling <task|run> <file|-> --by WHO [--date YYYY-MM-DD]
 #                                    an owner ruling, verbatim, quoted
 #   ledger land <wave> <sha> <task...> [--check TEXT]
@@ -19,6 +21,15 @@ set -e
 #   ledger now <file|->              replace the run's "Now" section
 #   ledger ref <task>                print owner/repo#n (or plan#task)
 #   ledger status                    the resume view, about 30 lines
+#   ledger show <task> [--brief] [--last N] [--full]
+#                                    task text, no JSON: body (or its Goal,
+#                                    Wave, Tier and Depends lines) and the last
+#                                    N results (default 1), trimmed to 15 lines
+#   ledger comments <task> [--since YYYY-MM-DD] [--last N] [--heads]
+#   ledger grep <regex> [--closed]   matching lines in the run's tasks
+#   ledger index [--stale | --save <file|->] [--all]
+#                                    one cached line per task; --stale lists
+#                                    what a cheap reader must summarise
 #   ledger sync                      replay writes queued while GitHub failed
 #
 # <task> is a task name, an issue number or #n. --run N (or LEDGER_RUN) picks
@@ -32,7 +43,7 @@ die() {
 say() { echo "ledger: $*" >&2; }
 
 usage() {
-  sed -n '3,25s/^# \{0,1\}//p' "$0" >&2
+  sed -n '3,37s/^# \{0,1\}//p' "$0" >&2
   exit "${1:-1}"
 }
 
@@ -246,6 +257,7 @@ task_number() {
   case "$1" in
     '') usage ;;
     \#*) echo "${1#\#}" ;;
+    */*\#*) echo "${1##*#}" ;;
     run) run_number ;;
     *[!0-9]*)
       local n
@@ -496,6 +508,148 @@ gh_now() {
   say "updated Now on #$run"
 }
 
+# ------------------------------------------------------- lean reads (GitHub)
+# Every read prints plain text a model needs: no JSON envelope, URLs, node ids,
+# authors or reaction groups. Comment bodies are trimmed unless --full.
+
+LEAN_DEFS='
+def lbl(p): [.labels.nodes[].name | select(startswith(p)) | ltrimstr(p)];
+def st: if .state == "CLOSED" then (if .stateReason == "NOT_PLANNED" then "dropped" else "merged" end)
+        else (lbl("state:")[0] // "planned") end;
+def tname: .title | split(": ")[0];
+def head: "#\(.number) \(.title)",
+  "[\([st] + (lbl("round:") | map("round " + .)) + (lbl("wave:") | map("wave " + .)) + (lbl("tier:") | map(. + " tier")) | join(", "))] updated \(.updatedAt[:16] | sub("T"; " "))";
+def clean: gsub("<!--[^>]*-->\n?"; "") | sub("^\\s+"; "") | sub("\\s+$"; "");
+def trim($max): split("\n") | if $max > 0 and length > $max then .[:$max] + ["[\(length - $max) more lines; --full]"] else . end | join("\n");
+def brief: [split("\n")[] | select(test("^\\s*[-*]?\\s*\\*\\*(Goal|Wave|Tier|Depends on)(:\\*\\*|\\*\\*:)"))
+  | sub("^\\s*[-*]?\\s*"; "") | gsub("\\*\\*"; "") | .[:200]]
+  | reduce .[] as $l ([]; if any(.[]; split(":")[0] == ($l | split(":")[0])) then . else . + [$l] end) | join("\n");
+def comment($max): "--- \(.createdAt[:10])", (.body | clean | trim($max));
+'
+
+# issue_query <n> <comments>: one issue with only the fields the reads use.
+issue_query() {
+  gq -F n="$1" -F c="$2" -f owner="$OWNER" -f name="$NAME" -f query='
+    query($owner: String!, $name: String!, $n: Int!, $c: Int!) {
+      repository(owner: $owner, name: $name) { issue(number: $n) {
+        number title state stateReason updatedAt body
+        labels(first: 20) { nodes { name } }
+        comments(last: $c) { nodes { createdAt body } } } } }' "${@:3}"
+}
+
+gh_show() {
+  local n brief=0 last=1 max=15
+  n="$(task_number "${1:?show needs a task}")"
+  shift
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --brief) brief=1 && shift ;;
+      --last) last="${2:?}" && shift 2 ;;
+      --full) max=0 && shift ;;
+      *) usage ;;
+    esac
+  done
+  issue_query "$n" "$((last > 0 ? last : 1))" --jq "$LEAN_DEFS"'
+    .data.repository.issue | head, "",
+    (if '"$brief"' == 1 then (.body | brief) else (.body | clean) end),
+    (.comments.nodes | .[(length - '"$last"' | if . < 0 then 0 else . end):][] | "", comment('"$max"'))'
+}
+
+gh_comments() {
+  local n since="" last=100 heads=0 max=15
+  n="$(task_number "${1:?comments needs a task}")"
+  shift
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --since) since="${2:?}" && shift 2 ;;
+      --last) last="${2:?}" && shift 2 ;;
+      --heads) heads=1 && shift ;;
+      --full) max=0 && shift ;;
+      *) usage ;;
+    esac
+  done
+  issue_query "$n" "$last" --jq "$LEAN_DEFS"'
+    .data.repository.issue.comments.nodes[] | select(.createdAt >= "'"$since"'")
+    | if '"$heads"' == 1 then "\(.createdAt[:10]) \(.body | clean | split("\n") | map(select(length > 0))[:2] | join(" ") | .[:200])"
+      else comment('"$max"'), "" end'
+}
+
+# run_tasks <run>: every task with its body and recent comments, as JSON lines.
+run_tasks() {
+  gq -F n="$1" -f owner="$OWNER" -f name="$NAME" -f query='
+    query($owner: String!, $name: String!, $n: Int!) {
+      repository(owner: $owner, name: $name) { issue(number: $n) {
+        subIssues(first: 100) { nodes {
+          number title state stateReason updatedAt body
+          labels(first: 20) { nodes { name } }
+          comments(last: 30) { nodes { createdAt body } } } } } } }' \
+    --jq '.data.repository.issue.subIssues.nodes[]'
+}
+
+gh_grep() {
+  local re="${1:?grep needs a pattern}" closed=0
+  [ "${2:-}" = --closed ] && closed=1
+  run_tasks "$(run_number)" | jq -r --arg re "$re" "$LEAN_DEFS"'
+    select('"$closed"' == 1 or .state == "OPEN") | . as $i
+    | ([.title, (.body | clean)] + [.comments.nodes[] | .body]) | map(split("\n")[]) | .[]
+    | select(test($re; "i")) | "#\($i.number) \($i | tname): \(sub("^\\s*[-*>]?\\s*"; "") | gsub("\\*\\*"; "") | .[:160])"' \
+    | awk '{ print } NR == 60 { print "[more matches; narrow the pattern]"; exit }'
+}
+
+INDEX="$MAIN/.agents/ledger-index.tsv"
+PENDING="$MAIN/.agents/ledger-index.pending"
+
+# gh_index: one line per task from the cache. A task changed since its gist was
+# written shows "(stale)"; --stale lists those for a cheap reader to summarise.
+gh_index() {
+  local mode=list all=0 f
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --stale) mode=stale && shift ;;
+      --save) mode=save && f="$(text "${2:?--save needs a file or -}")" && shift 2 ;;
+      --all) all=1 && shift ;;
+      *) usage ;;
+    esac
+  done
+  mkdir -p "$MAIN/.agents"
+  exclude .agents/ledger-index.tsv
+  exclude .agents/ledger-index.pending
+  touch "$INDEX"
+  if [ "$mode" = save ]; then
+    [ -s "$PENDING" ] || die "nothing pending; run 'ledger index --stale' first"
+    # Lines "#n gist"; each is stamped with the updatedAt the reader saw.
+    awk -F'\t' 'FILENAME == ARGV[1] { at[$1] = $2; next }
+      FILENAME == ARGV[2] { if (match($0, /^#?[0-9]+[[:space:]]+/)) {
+          n = substr($0, 1, RLENGTH); gsub(/[^0-9]/, "", n); g = substr($0, RLENGTH + 1)
+          gsub(/\t/, " ", g); if (n in at) { new[n] = at[n] "\t" g; ok++ } }
+        next }
+      !($1 in new) { print }
+      END { for (n in new) print n "\t" new[n] > "/dev/stderr"; printf "%d\n", ok > "/dev/fd/3" }' \
+      "$PENDING" "$f" "$INDEX" 2> "$TMP/new.tsv" 3> "$TMP/ok" > "$TMP/keep.tsv"
+    cat "$TMP/keep.tsv" "$TMP/new.tsv" > "$INDEX"
+    say "saved $(cat "$TMP/ok") gists"
+    return 0
+  fi
+  gq -F n="$(run_number)" -f owner="$OWNER" -f name="$NAME" -f query='
+    query($owner: String!, $name: String!, $n: Int!) {
+      repository(owner: $owner, name: $name) { issue(number: $n) {
+        subIssues(first: 100) { nodes { number title state stateReason updatedAt labels(first: 20) { nodes { name } } } } } } }' \
+    --jq "$LEAN_DEFS"'.data.repository.issue.subIssues.nodes[]
+      | select('"$all"' == 1 or .state == "OPEN") | "\(.number)\t\(.updatedAt)\t\(tname)\t\(st)"' > "$TMP/now.tsv"
+  if [ "$mode" = stale ]; then
+    awk -F'\t' 'FILENAME == ARGV[1] { at[$1] = $2; next } at[$1] != $2 { print $1 "\t" $2 }' "$INDEX" "$TMP/now.tsv" > "$PENDING"
+    say "$(wc -l < "$PENDING" | tr -d ' ') stale of $(wc -l < "$TMP/now.tsv" | tr -d ' ')"
+    [ -s "$PENDING" ] || return 0
+    # The reader's input, in one query: each stale task's key lines and last two results.
+    run_tasks "$(run_number)" | jq -r --rawfile p "$PENDING" "$LEAN_DEFS"'
+      (.number | tostring) as $n | select($p | split("\n") | any(.[]; split("\t")[0] == $n))
+      | "=== #\(.number) \(tname) [\(st)]", (.body | brief), (.comments.nodes[-2:][] | comment(10)), ""'
+    return 0
+  fi
+  awk -F'\t' 'FILENAME == ARGV[1] { at[$1] = $2; g[$1] = $3; next }
+    { print "#" $1 " " $3 " [" $4 "]: " (at[$1] == $2 ? g[$1] : "(stale)") }' "$INDEX" "$TMP/now.tsv"
+}
+
 gh_ref() { echo "$REPO#$(task_number "$1")"; }
 
 gh_status() {
@@ -702,6 +856,32 @@ file_status() {
   [ ! -s "$QUEUE" ] || echo "Queued GitHub writes: $(wc -l < "$QUEUE") (run 'ledger sync')"
 }
 
+# file mode reads: the task's row, its plan section, and its log entries.
+plan_files() { section_get plan < "$FILE" | sed -n 's/^Plan file: //p' | sed "s#^\([^/]\)#$MAIN/\1#"; }
+
+file_show() {
+  local t="${1:?show needs a task}" p
+  need_file
+  grep "^| $t |" "$FILE" || die "no task named '$t' in $FILE"
+  for p in $(plan_files); do
+    [ -f "$p" ] && awk -v t="$t" '/^## Task:/ { on = ($0 ~ ("^## Task:[[:space:]]*`?" t "`?[[:space:]]*$")); next } /^##? / { on = 0 } on' "$p"
+  done
+  file_comments "$t" --last "$(echo "$*" | sed -n 's/.*--last \([0-9]*\).*/\1/p' | grep . || echo 1)"
+}
+
+file_comments() {
+  local t="${1:?comments needs a task}" last=100
+  [ "${2:-}" = --last ] && last="${3:?}"
+  need_file
+  awk -v t="$t" '/^### / { on = (index($0, " " t) > 0) } on' "$FILE" \
+    | awk -v n="$last" '/^### / { k++ } { a[k] = a[k] $0 "\n" } END { for (i = k - n + 1; i <= k; i++) if (i > 0) printf "%s", a[i] }'
+}
+
+file_grep() {
+  need_file
+  grep -in -e "${1:?grep needs a pattern}" "$FILE" $(plan_files) 2> /dev/null | cut -c1-200 | head -n 60 || true
+}
+
 # ---------------------------------------------------------- queue and dispatch
 
 b64() { printf '%s' "$1" | base64 | tr -d '\n'; }
@@ -757,7 +937,11 @@ dispatch() {
         "$MODE" "${REPO:--}" "${RUN:--}" "${PROJECT:--}" "$PLAN_DIR"
       ;;
     labels) [ "$MODE" = file ] && say "file mode has no labels" || gh_labels ;;
-    init | import | state | note | ruling | land | now | ref | status) "${MODE/github/gh}_$sub" "$@" ;;
+    init | import | state | note | ruling | land | now | ref | status | show | comments | grep) "${MODE/github/gh}_$sub" "$@" ;;
+    index)
+      [ "$MODE" = github ] || die "file mode has no index; read 'ledger status' and 'ledger show'"
+      gh_index "$@"
+      ;;
     sync) cmd_sync ;;
     -h | --help | help) usage 0 ;;
     *) usage ;;
@@ -784,7 +968,19 @@ SUB="${1:-}"
 case "$SUB" in
   import) [ "${2:-}" != - ] || set -- "$1" "$(text -)" "${@:3}" ;;
   now) [ -z "${2:-}" ] || set -- "$1" "$(text "$2")" "${@:3}" ;;
-  note | ruling) [ -z "${3:-}" ] || set -- "$1" "$2" "$(text "$3")" "${@:4}" ;;
+  note)
+    # --from <worktree>: post the reply the worker saved in its worktree's git dir, then set it aside.
+    if [ "${3:-}" = --from ]; then
+      reply="$(git -C "${4:?--from needs a worktree}" rev-parse --path-format=absolute --git-path ledger-reply.md)" \
+        || die "not a worktree: $4"
+      [ -s "$reply" ] || die "no saved reply at $reply; post the reply on stdin instead"
+      set -- "$1" "$2" "$(text "$reply")" "${@:5}"
+      mv "$reply" "$reply.posted"
+    elif [ -n "${3:-}" ]; then
+      set -- "$1" "$2" "$(text "$3")" "${@:4}"
+    fi
+    ;;
+  ruling) [ -z "${3:-}" ] || set -- "$1" "$2" "$(text "$3")" "${@:4}" ;;
 esac
 
 case "$SUB" in

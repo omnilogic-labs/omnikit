@@ -24,8 +24,9 @@ do that in their own contexts and send back short reports.
 5. **Two failed verify rounds on a task mean the planner rescopes it.** Do not send it to a builder a third time.
 6. **Integrate one wave at a time.** Rebase each task onto the integration branch, run the repo check command,
    then fast-forward the base branch. History stays linear and keeps the builders' commits.
-7. **Track state with `scripts/ledger` only:** a run issue and one issue per task (or `.agents/ledger.md`). State
-   changes are silent label edits; only results are comments. Never read whole issue threads; ask the helper.
+7. **Track state with `scripts/ledger` only:** a run issue and one issue per task (or `.agents/ledger.md`). Labels
+   hold state; only results are comments. Read cheapest first: `status`, `index`, `show <task> --brief`, `show`;
+   never raw `gh issue view` or `gh api` output (`references/ledger.md`, Reading cheaply).
 8. **Stop only for an owner decision, a missing credential, or a broken base branch.** Otherwise keep going.
 9. **Do not dispatch duplicate workers.** Before dispatching, check what is already running.
 
@@ -63,13 +64,13 @@ models. Read hosts.md once at the start.
 2. **Build.** For each task in the current wave whose dependencies are `merged`, up to max lanes at once:
    - create a worktree with `scripts/wt create <task>` (`scripts/` is relative to this SKILL.md's directory, not the repo root), which prints its path;
    - dispatch a builder on the tier the plan gives, with the task reference (`scripts/ledger ref <task>`) and the
-     worktree path;
+     worktree path, never the plan text: workers read their own task;
    - `scripts/ledger state <task> building`.
-3. **Verify.** Post the builder's reply with `ledger note <task> - --head "Builder (<tier>), <branch>, <sha>"`,
-   dispatch a verifier on the same worktree with the task reference (never the builder's claims), and set
-   `verifying`.
-4. **Fix.** Post every verdict with `ledger note <task> - --head "Verify round n: PASS|FAIL"`. On any FAIL,
-   UNVERIFIED, MISSES, or UNJUDGED, send those lines back to the builder and set `fixing --round n`. After the
+3. **Verify.** Post the builder's saved reply, `ledger note <task> --from <worktree> --head "Builder (<tier>),
+<branch>, <sha>"`, dispatch a verifier on that worktree with the task reference (never the builder's claims),
+   and set `verifying`.
+4. **Fix.** Post every verdict: `ledger note <task> --from <worktree> --head "Verify round n: PASS|FAIL"`. On any
+   FAIL, UNVERIFIED, MISSES, or UNJUDGED, send those lines back to the builder and set `fixing --round n`. After the
    second failed round, dispatch a planner to rescope; import its plan and set the old task `dropped`.
 5. **Pass.** When every check is PASS and every judged goal is MEETS or CLOSE, set `passed`. CLOSE lines stay in
    the verdict comment; `ledger status` lists them for the owner's milestone look.
@@ -118,7 +119,7 @@ When every task is `merged` and the milestone review passes:
 
 ## Reading worker replies
 
-- Ask workers for replies of ten lines or fewer, with file paths instead of pasted output.
+- Ask workers for replies of ten lines or fewer, with file paths instead of pasted output. Never retype a reply.
 - If a reply is unclear, ask the worker a follow-up question. Do not open the file yourself.
 - A builder's "done" is a claim. Only a verifier's report moves a task forward.
 
@@ -137,8 +138,7 @@ stdout, so `scripts/wt list` is safe to parse. It is bash: on Windows run it fro
 
 The defaults are `../<repo>-worktrees/<name>` on `wave/<name>`; `.agents/coordinator.md` can change both.
 
-`scripts/ledger`, beside it, is your only way to write the ledger; run it the same way. `references/ledger.md`
-lists its commands.
+`scripts/ledger`, beside it, is your only way to write the ledger; run it the same way. `references/ledger.md` lists its commands.
 
 ## References
 

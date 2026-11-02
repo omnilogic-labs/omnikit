@@ -4,8 +4,9 @@ The role prompts are in this skill's folder: `roles/planner.md`, `roles/builder.
 holds the role's prompt body, with no frontmatter.
 
 Every dispatch prompt names two things: the task reference that `scripts/ledger ref <task>` prints (an issue,
-`owner/repo#n`, which the worker reads with `gh issue view`; or in file mode `<plan path>#<task>`) and the worktree
-path. Ask for a reply of ten lines or fewer.
+`owner/repo#n`, which the worker reads itself with `gh issue view <n> -R <owner/repo> --json title,body --jq
+'.title, .body'`; or in file mode `<plan path>#<task>`) and the worktree path. Never paste the plan text. Ask for a
+reply of ten lines or fewer, also saved to the worktree's `ledger-reply.md` (`ledger.md`, Writing cheaply).
 
 | Role     | Tier                                                  |
 | -------- | ----------------------------------------------------- |
@@ -69,6 +70,30 @@ path. Ask for a reply of ten lines or fewer.
   `codex exec -m {{codex.review.model}} -c model_reasoning_effort={{codex.review.effort}} -s read-only -C <worktree> "<prompt>" > <out>`),
   wait for it to finish, save the output to a file, and return the file path and exit code. Never pass `--effort` to
   `agy` when the model slug already pins the effort level.
+
+<!-- @endif -->
+
+## The index reader
+
+The reader that keeps `ledger index` current (`ledger.md`, Reading cheaply) needs no judgement, so it runs on the
+host's lightest model:
+
+<!-- @if claude -->
+
+- Claude Code: a `general-purpose` agent with `model: "{{alt.lighter}}"`, in the background. Use
+  `{{tier.fast}}` only if its gists come back wrong.
+
+<!-- @endif -->
+
+<!-- @if codex -->
+
+- Codex: a default agent on `{{tier.fast}}` at effort `{{effort.fast}}`.
+
+<!-- @endif -->
+
+<!-- @if agy -->
+
+- Antigravity: a `{{tool.selfType}}` agent with `Model: "{{runner.model}}"`.
 
 <!-- @endif -->
 

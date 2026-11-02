@@ -4,8 +4,9 @@ The role prompts are in this skill's folder: `roles/planner.md`, `roles/builder.
 holds the role's prompt body, with no frontmatter.
 
 Every dispatch prompt names two things: the task reference that `scripts/ledger ref <task>` prints (an issue,
-`owner/repo#n`, which the worker reads with `gh issue view`; or in file mode `<plan path>#<task>`) and the worktree
-path. Ask for a reply of ten lines or fewer.
+`owner/repo#n`, which the worker reads itself with `gh issue view <n> -R <owner/repo> --json title,body --jq
+'.title, .body'`; or in file mode `<plan path>#<task>`) and the worktree path. Never paste the plan text. Ask for a
+reply of ten lines or fewer, also saved to the worktree's `ledger-reply.md` (`ledger.md`, Writing cheaply).
 
 | Role     | Tier                                                  |
 | -------- | ----------------------------------------------------- |
@@ -27,6 +28,14 @@ path. Ask for a reply of ten lines or fewer.
 - Do not use `isolation: "worktree"` or `EnterWorktree`. Builders work in the worktree `scripts/wt` made.
 - Ask a finished worker a follow-up with `SendMessage` instead of reading its files.
 - To check what is already running before you dispatch, look at your live background agents.
+
+## The index reader
+
+The reader that keeps `ledger index` current (`ledger.md`, Reading cheaply) needs no judgement, so it runs on the
+host's lightest model:
+
+- Claude Code: a `general-purpose` agent with `model: "haiku"`, in the background. Use
+  `sonnet` only if its gists come back wrong.
 
 ## No subagents
 

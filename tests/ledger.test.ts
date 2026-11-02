@@ -25,6 +25,8 @@ case "$1 $2" in
   "issue comment") echo "https://github.com/o/r/issues/1#c" ;;
   "api graphql")
     if [[ "$*" == *"issues(first: 10"* ]]; then out < "$STUB/status.json"
+    elif [[ "$*" == *'$c: Int!'* ]]; then out < "$STUB/issue.json"
+    elif [[ "$*" == *updatedAt* ]]; then out < "$STUB/tasks.json"
     else echo '{"data":{"repository":{"issue":{"subIssues":{"nodes":[]}}}}}' | out; fi ;;
   "label list") ;;
 esac
@@ -174,4 +176,120 @@ test("status shows a blocked task's reason, not its note heading", () => {
   const out = ledger(["status"]).out;
   expect(out).toContain("blocked: auth #2: Needs staging credentials from the owner.");
   expect(out).not.toContain("Blocked: needs credentials");
+});
+
+// Lean reads: plain text, no JSON envelope or URLs.
+const BODY =
+  "- **Goal:** make it fast\n- **Files:** `a.ts`\n- **Steps:**\n  1. do it\n- **Tier:** fast\n- **Wave:** G2\n- **Depends on:** none";
+const issue = (number: number, updatedAt: string, comments: string[]) => ({
+  number,
+  title: `speed: make it fast`,
+  state: "OPEN",
+  stateReason: null,
+  updatedAt,
+  body: BODY,
+  labels: { nodes: [{ name: "state:fixing" }, { name: "round:2" }, { name: "wave:G2" }] },
+  comments: {
+    nodes: comments.map((body, i) => ({ createdAt: `2026-11-0${i + 1}T10:00:00Z`, body })),
+  },
+});
+const LONG = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`).join("\n");
+const runWith = (nodes: unknown[]) => {
+  writeFileSync(
+    join(stub, "issues.json"),
+    JSON.stringify([{ number: 1, title: "Run: x", body: "" }])
+  );
+  writeFileSync(
+    join(stub, "tasks.json"),
+    JSON.stringify({ data: { repository: { issue: { subIssues: { nodes } } } } })
+  );
+};
+const one = (i: unknown) =>
+  writeFileSync(join(stub, "issue.json"), JSON.stringify({ data: { repository: { issue: i } } }));
+
+test("show prints the task as text with the last result trimmed", () => {
+  one(
+    issue(5, "2026-11-02T10:00:00Z", [
+      "**Builder (fast), wave/speed, abc**\n\nold",
+      `**Verify round 1: FAIL**\n${LONG}`,
+    ])
+  );
+  const r = ledger(["show", "o/r#5"]);
+  expect(r.code).toBe(0);
+  expect(r.out).toContain(
+    "#5 speed: make it fast\n[fixing, round 2, wave G2] updated 2026-11-02 10:00"
+  );
+  expect(r.out).toContain("1. do it");
+  expect(r.out).toContain("Verify round 1: FAIL");
+  expect(r.out).not.toContain("Builder (fast)");
+  expect(r.out).toContain("[16 more lines; --full]");
+  expect(r.out).not.toMatch(/https?:|"body"|\{/);
+});
+
+test("show --brief keeps only the key field lines", () => {
+  one(issue(5, "2026-11-02T10:00:00Z", []));
+  const out = ledger(["show", "5", "--brief", "--last", "0"]).out;
+  expect(out).toContain("Goal: make it fast\nTier: fast\nWave: G2\nDepends on: none");
+  expect(out).not.toContain("a.ts");
+});
+
+test("comments --heads gives one line per result", () => {
+  one(
+    issue(5, "2026-11-02T10:00:00Z", [
+      "**Verify round 1: FAIL**\n\ntests fail",
+      "**Verify round 2: PASS**\n\nall pass",
+    ])
+  );
+  const out = ledger(["comments", "5", "--heads", "--since", "2026-11-02"]).out.trim();
+  expect(out).toBe("2026-11-02 **Verify round 2: PASS** all pass");
+});
+
+test("grep prints matching lines with their task", () => {
+  runWith([issue(5, "2026-11-02T10:00:00Z", ["**Owner ruling**\n\n> keep the shards"])]);
+  const out = ledger(["grep", "SHARDS"]).out.trim();
+  expect(out).toBe("#5 speed: keep the shards");
+});
+
+test("index caches gists by updatedAt and marks changed tasks stale", () => {
+  runWith([issue(5, "2026-11-02T10:00:00Z", []), issue(6, "2026-11-02T10:00:00Z", [])]);
+  const stale = ledger(["index", "--stale"]);
+  expect(stale.out).toContain("=== #5 speed [fixing]");
+  expect(stale.out).toContain("Goal: make it fast");
+  expect(ledger(["index", "--save", "-"], "#5 speed work | waits on owner\n6 other\n").code).toBe(
+    0
+  );
+  expect(ledger(["index"]).out).toBe(
+    "#5 speed [fixing]: speed work | waits on owner\n#6 speed [fixing]: other\n"
+  );
+  expect(ledger(["index", "--stale"]).out).toBe("");
+  runWith([issue(5, "2026-11-03T09:00:00Z", []), issue(6, "2026-11-02T10:00:00Z", [])]);
+  expect(ledger(["index"]).out).toContain("#5 speed [fixing]: (stale)");
+  expect(ledger(["index", "--stale"]).out).toContain("=== #5");
+});
+
+test("note --from posts the reply the worker saved, once", () => {
+  writeFileSync(
+    join(stub, "issues.json"),
+    JSON.stringify([{ number: 1, title: "Run: x", body: "" }])
+  );
+  const wt = join(root, "repo");
+  const saved = Bun.spawnSync([
+    "git",
+    "-C",
+    wt,
+    "rev-parse",
+    "--path-format=absolute",
+    "--git-path",
+    "ledger-reply.md",
+  ])
+    .stdout.toString()
+    .trim();
+  writeFileSync(saved, "wave/speed abc123\nPASS check\n");
+  const r = ledger(["note", "5", "--from", wt, "--head", "Builder (fast), wave/speed, abc123"]);
+  expect(r.code).toBe(0);
+  expect(r.out.trim().split("\n")).toHaveLength(1);
+  expect(calls().some((c) => c.startsWith("issue comment 5 "))).toBe(true);
+  const again = ledger(["note", "5", "--from", wt]);
+  expect(again.code).not.toBe(0);
+  expect(again.err).toContain("no saved reply");
 });

@@ -23,13 +23,19 @@ It has two backends, picked by the `Ledger` setting in `.agents/coordinator.md` 
 |                                                  | and "blocked by" links; skips names that already exist, so a rescope plan adds to it |
 | `state <task> <state> [--round n]`               | swaps the `state:` label (silent); `merged` and `dropped` close the issue            |
 | `note <task\|run> <file\|-> [--head TEXT]`       | a comment: a builder report, a verdict, a blocked reason                             |
+| `note <task> --from <worktree> [--head TEXT]`    | the same, from the reply the worker saved in its worktree (see Writing cheaply)      |
 | `ruling <task\|run> <file\|-> --by WHO [--date]` | a comment quoting the owner's words, and a link in the run's Rulings list            |
 | `land <wave> <sha> <task...> [--check TEXT]`     | adds `Landed: <sha>` to each task body, closes them, one result comment on the run   |
 | `now <file\|->`                                  | replaces the run's "Now" section (silent)                                            |
 | `ref <task>`                                     | nothing; prints `owner/repo#n` (file mode: `<plan path>#<task>`) for a dispatch      |
+| `show <task> [--brief] [--last N] [--full]`      | nothing; the task as text: body (or `--brief`: its Goal, Tier, Wave, Depends lines)  |
+|                                                  | and its last N results (default 1), each trimmed to 15 lines unless `--full`         |
+| `comments <task> [--since DATE] [--heads]`       | nothing; the task's results; `--heads` gives one line each                           |
+| `grep <regex> [--closed]`                        | nothing; matching lines across the run's open tasks, as `#n task: line`              |
+| `index [--stale \| --save <file\|->]`            | nothing on GitHub; the cached one-line gists (see Reading cheaply)                   |
 | `sync`                                           | replays writes queued while GitHub was unreachable                                   |
 
-`<task>` is a task name, an issue number or `#n`. With more than one open run in the repo (two coordinators),
+`<task>` is a task name, an issue number, `#n` or `owner/repo#n`. With more than one open run in the repo (two coordinators),
 pass `--run <n>` on every call, or set `LEDGER_RUN`. Each coordinator touches only its own run.
 
 ## States
@@ -83,6 +89,55 @@ Rulings: 2 (in the run body)
 ```
 
 `ready` tasks have every "blocked by" task closed; `waiting` ones do not. Read this, not the issues.
+
+## Reading cheaply
+
+Every token the coordinator reads stays in its context for the rest of the run, so it reads the least that
+answers the question. Measured on a real 71-task run (task bodies average about 900 tokens):
+
+- The GitHub REST API (`gh api repos/.../issues/n` plus its comments) costs about 2.3 times the text it carries:
+  URLs, node ids, authors, reaction groups. `gh issue view --json` with a field list costs about 1.2 times.
+- Most of the cost is task bodies, not the envelope. So the win is not reading bodies at all.
+
+Read in this order and stop as soon as you know enough:
+
+1. `ledger status`: the resume view, about 30 lines.
+2. `ledger index`: one cached line per open task (gist, then what it waits on). A fast-tier reader keeps it
+   current; you never read the tasks yourself to build it.
+3. `ledger show <task> --brief`: the task's Goal, Tier, Wave and Depends lines and its last result.
+4. `ledger comments <task> --heads`, then `ledger show <task>` (trimmed), and `--full` only for a quote.
+5. `ledger grep <text>` to find which task mentions something, instead of opening several.
+
+Never paste tool output into context when a summary will do, and never run `gh issue view` on a thread or `gh api`
+without `--jq`. Raw `gh` is fine for things the helper does not cover; give it `--json <fields>` and `--jq`.
+Note that `gh issue view <n> --comments`, piped, prints the comments only and not the body.
+
+**The index reader.** When `ledger index` shows `(stale)` lines, dispatch one reader on the host's lightest
+model (`hosts.md`, The index reader) with this brief, filled in:
+
+```text
+Run `<skill dir>/scripts/ledger index --stale > <tmp>/stale.txt` in <repo>. Each block starts
+`=== #<n> <task> [<state>]`. For each block write one line, `#<n> <gist> | <open question, or what it
+waits on, or ->`, at most 20 words, from the block alone. Write the lines to <tmp>/gists.txt, run
+`<skill dir>/scripts/ledger index --save <tmp>/gists.txt`, and reply with its output only.
+Never write to GitHub.
+```
+
+`--stale` fetches every changed task in one query and records the `updatedAt` it saw; `--save` stamps each gist
+with that time. A task is summarised again only after it changes, so a resume costs nothing for quiet tasks.
+The cache is `.agents/ledger-index.tsv`, kept out of git. Use the index for a run of more than about ten open
+tasks; below that, `status` and `show --brief` are cheaper than a dispatch.
+
+**Workers read their own task.** Never paste plan text into a brief: pass the reference. A worker reads its task
+with `gh issue view <n> -R <owner/repo> --json title,body --jq '.title, .body'` (the body only, no comments,
+no envelope), or `ledger show <task> --last 0` if it has the helper.
+
+## Writing cheaply
+
+- Builders and verifiers save their final reply to `$(git rev-parse --git-path ledger-reply.md)` in their
+  worktree. Post it with `ledger note <task> --from <worktree> --head ...`, which moves the file aside after
+  reading it, so you never retype a reply. Without a saved reply it fails; then pass the reply on stdin.
+- Every write confirms in one line (a comment URL, or `ledger: #n is building`). Do not read the issue back.
 
 ## The project board
 
