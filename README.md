@@ -18,6 +18,12 @@ One plugin, `omnilogic-labs`, carries every skill and agent. In Claude Code they
 
 Agents: `planner`, `builder`, `verifier`, `browser-buddy`, and `external-runner`.
 
+### Kits
+
+A kit is a smaller plugin built from the same sources, for a machine that should not carry everything. The default install stays the whole plugin.
+
+- `essentials` (plugin `omnilogic-labs-essentials`): for people who are not developers. It holds `plain-writing`, `artistic-vision`, `agent-browser` and the `browser-buddy` agent, and no hooks. Its `agent-browser` skill assumes the browser is already installed on the machine and never tells the agent to run `setup-browser-buddy.sh`.
+
 ## Install
 
 Clone, preview, then install. The installer is safe to re-run.
@@ -38,6 +44,8 @@ bash install.sh
 The installer runs `bun run build` first, then links. It picks every tool it finds on PATH and says which ones it skipped. Other flags: `--claude`, `--codex`, `--agy` (one tool only), `--browser` (also set up agent-browser and Chrome), `--force`, `--check`, `--help`. `OMNIKIT_OS=linux|wsl|macos|windows` overrides the detected OS. Re-run after a `git pull` or any `src/` edit, and restart open Claude Code, Codex, and agy sessions so they rescan.
 
 Run the installer from the main checkout, not a worktree: Claude Code's marketplace points at whichever clone ran it.
+
+`bash install.sh --kit essentials` installs a kit instead of everything: the `omnilogic-labs-essentials@omnikit` plugin for Claude Code, and only the kit's skills and agents for Codex and agy (from the same `dist/` trees as the whole install). One kit at a time: installing a kit removes the whole plugin and its links, and a plain `bash install.sh` removes the kit again. `bun run verify -- --kit essentials` checks a kit install.
 
 ### Windows
 
@@ -100,7 +108,7 @@ bun install
 
 ### The build
 
-Skills and agents are written once under `src/` and compiled for each host. Edit `src/` and `scripts/build/hosts.ts` (models, efforts, tool names) or `scripts/build/os.ts` (OS values). Never edit the generated trees: `plugins/omnilogic-labs/{skills,agents}`, root `skills/`, and `dist/`.
+Skills and agents are written once under `src/` and compiled for each host. Edit `src/` and `scripts/build/hosts.ts` (models, efforts, tool names), `scripts/build/os.ts` (OS values) or `scripts/build/kits.ts` (which skills and agents each kit carries). Never edit the generated trees: `plugins/omnilogic-labs/{skills,agents}`, each kit's `plugins/<kit plugin>/{skills,agents,bin}`, root `skills/`, and `dist/`.
 
 ```bash
 bun run build         # regenerate every tree
@@ -111,6 +119,7 @@ bun test              # run the compiler tests (bun run test)
 What it writes:
 
 - `plugins/omnilogic-labs/`: the Claude Code plugin, committed, rendered for every OS.
+- `plugins/omnilogic-labs-essentials/`: the essentials kit's Claude Code plugin, committed, rendered for every OS as the kit. Its `bin/agent-browser` is a copy of the whole plugin's; its `.claude-plugin/plugin.json` and `README.md` are hand-written.
 - `skills/`: the portable copy `npx skills` installs, committed. Each skill is a short dispatcher `SKILL.md` plus `platforms/<host>.md` bodies, so one install serves Claude Code, Codex, and agy.
 - `dist/codex` and `dist/agy`: gitignored, rendered for this machine's OS (recorded in `dist/<host>/.os`). Codex agents are TOML; agy agents are Markdown.
 
@@ -118,12 +127,13 @@ Template syntax, in any `src/` Markdown file:
 
 - `{{tier.deep}}`, `{{cli.fast}}`, `{{tool.agent}}`, `{{host.label}}`, `{{os.shell}}`: values for the host being rendered. `{{os.*}}` works only inside a one-OS `@if` block (such as `<!-- @if windows -->`), because the committed any-OS trees have no single OS and the build fails elsewhere. `{{codex.tier.deep}}` reads another host's value. An unknown name fails the build.
 - `<!-- @if codex -->` ... `<!-- @endif -->` keeps the lines between only for that host. `<!-- @if claude,agy -->` is OR. A host list and an OS list may be combined with a space: `<!-- @if codex windows -->`. Blocks do not nest.
+- `<!-- @if kit:essentials -->` keeps the lines only in that kit's tree; `<!-- @if kit:full -->` keeps them everywhere else (the whole plugin, root `skills/`, `dist/`). A kit list combines with a host or OS list: `<!-- @if claude kit:full -->`.
 - OS names are `linux`, `wsl`, `macos`, `windows`. In the committed any-OS trees an OS block is kept under a label line such as `On Windows (Git Bash):`; in `dist/` only the matching OS stays.
 - Agent frontmatter may carry `tier: deep|fast`; the build turns it into each host's model.
 
 `bun run verify` also runs the build check, so a stale tree fails it. Commit regenerated trees with the `src/` change that caused them.
 
-Each plugin under `plugins/*` is a workspace member. The root package is private and not published to npm; distribution happens via the Git repo itself (see Install above).
+The skill folders of `plugins/omnilogic-labs` that carry a `package.json` are workspace members; a kit's copies are not, and resolve their packages from the root `node_modules`. The root package is private and not published to npm; distribution happens via the Git repo itself (see Install above).
 
 ## Repository Structure
 
@@ -134,6 +144,7 @@ omnikit/
   src/                              # Source of every skill and agent: edit here
   scripts/build/                    # Compiler, hosts.ts and os.ts tables, tests
   plugins/omnilogic-labs/           # The plugin: generated skills/ and agents/, plus bin/, evals/
+  plugins/omnilogic-labs-essentials/ # The essentials kit: generated skills/, agents/, bin/
   skills/                           # Generated portable copy for npx skills
   dist/                             # Generated Codex and agy trees (gitignored)
   install.sh                        # Installs into Claude Code, Codex, and agy

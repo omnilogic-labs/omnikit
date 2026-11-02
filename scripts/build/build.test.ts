@@ -7,11 +7,13 @@ import {
   compile,
   diffCommittedTrees,
   emitAgent,
+  kitsFor,
   resolveDefaultOs,
   ROLE_PROMPTS,
   ROLE_SKILL,
 } from "./build";
 import { HOSTS, HOST_NAMES, varsFor } from "./hosts";
+import { KITS, type Kit } from "./kits";
 import { detectOs, OS_NAMES, OS_TARGETS, type OsTarget } from "./os";
 import { filterFrontmatter, render, tomlString, type RenderError } from "./render";
 
@@ -714,5 +716,92 @@ describe("role prompts", () => {
     expect(out.has(`${HOSTS.claude.root}/agents/external-runner.md`)).toBe(true);
     expect(out.has(`${HOSTS.codex.root}/agents/external-runner.toml`)).toBe(false);
     expect(out.has(`${HOSTS.agy.root}/agents/external-runner.md`)).toBe(false);
+  });
+});
+
+describe("kits", () => {
+  const SRC = join(import.meta.dir, "..", "..", "src");
+  const kr = (text: string, kit?: string) =>
+    render(text, {
+      host: "claude",
+      vars: varsFor("claude"),
+      file: "t.md",
+      hosts: HOST_NAMES,
+      kit,
+      kits: ["full", "essentials"],
+    });
+  const fixtureKit: Kit = {
+    name: "essentials",
+    plugin: "fixture-kit",
+    skills: ["demo"],
+    agents: ["planner"],
+    bin: [],
+  };
+
+  test("@if kit: keeps a block only for the named kits, full by default", () => {
+    const src =
+      "a\n<!-- @if kit:full -->\nfull\n<!-- @endif -->\n<!-- @if claude kit:essentials -->\nkit\n<!-- @endif -->\nb\n";
+    expect(kr(src)).toEqual({ ok: true, text: "a\nfull\nb\n" });
+    expect(kr(src, "essentials")).toEqual({ ok: true, text: "a\nkit\nb\n" });
+  });
+
+  test("an unknown kit or two kit lists is an error", () => {
+    const one = (t: string) => {
+      const res = kr(t);
+      if (res.ok) throw new Error("expected an error");
+      return res.errors.map((e) => e.message);
+    };
+    expect(one("<!-- @if kit:nope -->\nx\n<!-- @endif -->\n")[0]).toContain('unknown kit "nope"');
+    expect(one("<!-- @if kit:full kit:essentials -->\nx\n<!-- @endif -->\n")[0]).toContain(
+      "two kit lists"
+    );
+  });
+
+  test("a kit tree holds only its skills and agents, rendered as the kit", async () => {
+    const { out, errors } = await compile(join(FIX, "src"), "any", [fixtureKit]);
+    expect(errors).toEqual([]);
+    const kit = [...out.keys()].filter((k) => k.startsWith("plugins/fixture-kit/")).sort();
+    expect(kit).toContain("plugins/fixture-kit/skills/demo/SKILL.md");
+    expect(kit).toContain("plugins/fixture-kit/agents/planner.md");
+    expect(kit.some((k) => /agents\/(helper|builder)/.test(k))).toBe(false);
+    expect(kit.some((k) => k.includes("/hooks/"))).toBe(false);
+    expect(out.get("plugins/fixture-kit/agents/planner.md")!.data).toContain("model: opus\n");
+  });
+
+  test("a kit naming a missing skill fails the build", async () => {
+    const bad = { ...fixtureKit, skills: ["missing"] };
+    const { errors } = await compile(join(FIX, "src"), "any", [bad]);
+    expect(errors.join("\n")).toContain('names skill "missing"');
+  });
+
+  test("only this repo's src builds the kit table", () => {
+    expect(kitsFor(SRC)).toBe(KITS);
+    expect(kitsFor(join(FIX, "src"))).toEqual([]);
+  });
+
+  test("the essentials kit: its skills, browser-buddy, the agent-browser wrapper, no setup script", async () => {
+    const { out, errors } = await compile(SRC);
+    expect(errors).toEqual([]);
+    const root = "plugins/omnilogic-labs-essentials/";
+    const top = new Set(
+      [...out.keys()]
+        .filter((k) => k.startsWith(root))
+        .map((k) => k.slice(root.length).split("/").slice(0, 2).join("/"))
+    );
+    expect([...top].sort()).toEqual([
+      "agents/browser-buddy.md",
+      "bin/agent-browser",
+      "skills/agent-browser",
+      "skills/artistic-vision",
+      "skills/plain-writing",
+    ]);
+    const kitText = [...out.entries()]
+      .filter(([k]) => k.startsWith(root) && k.endsWith(".md"))
+      .map(([, v]) => (typeof v.data === "string" ? v.data : new TextDecoder().decode(v.data)))
+      .join("\n");
+    expect(kitText).not.toContain("setup-browser-buddy");
+    expect(out.get(`${HOSTS.claude.root}/skills/agent-browser/SKILL.md`)!.data).toContain(
+      "setup-browser-buddy"
+    );
   });
 });

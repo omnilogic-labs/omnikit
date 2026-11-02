@@ -28,7 +28,7 @@
     "build": "bun scripts/build/build.ts",
     "build:check": "bun scripts/build/build.ts --check",
     "test": "bun test scripts/build tests",
-    "check": "prettier --check . && claude plugin validate --strict . && claude plugin validate --strict plugins/omnilogic-labs"
+    "check": "prettier --check . && claude plugin validate --strict . && claude plugin validate --strict plugins/omnilogic-labs && claude plugin validate --strict plugins/omnilogic-labs-essentials"
   },
   "devDependencies": {
     "happy-dom": "^20.14.6",

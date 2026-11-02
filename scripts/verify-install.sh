@@ -3,11 +3,15 @@
 #
 #   bash scripts/verify-install.sh          deterministic checks only
 #   bash scripts/verify-install.sh --ask    also ask each tool's model
+#   bash scripts/verify-install.sh --kit essentials   check a kit install
 #
 # Deterministic checks: the build is fresh (bun run build:check),
 # install.sh --check, the Claude Code marketplace and plugin list, the skills,
 # agents, plugin, and external_worker tool in Claude Code's system/init event,
 # and the skill and agent links Codex and agy read (into dist/codex, dist/agy).
+#
+# --kit <name> checks an install made with install.sh --kit <name>: the
+# omnilogic-labs-<name> plugin, and only that kit's skills and agents.
 #
 # --ask runs one prompt per tool (claude, codex, agy) and checks that each
 # answer names every skill. It costs a few model calls and up to a few minutes.
@@ -32,17 +36,23 @@ DIST="$REPO_ROOT/dist"
 ASK_TIMEOUT=300
 
 ASK=false
+KIT=""
 n_pass=0
 n_fail=0
 n_skip=0
 
 usage() {
-  sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//' >&2
+  sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//' >&2
 }
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --ask) ASK=true ;;
+    --kit)
+      KIT="${2:-}"
+      shift
+      ;;
+    --kit=*) KIT="${1#--kit=}" ;;
     -h | --help)
       usage
       exit 0
@@ -58,6 +68,19 @@ done
 
 say() { echo "$*" >&2; }
 has() { command -v "$1" > /dev/null 2>&1; }
+
+[ "$KIT" = full ] && KIT=""
+INSTALL_ARGS=()
+if [ -n "$KIT" ]; then
+  NS="omnilogic-labs-$KIT"
+  PLUGIN_ID="$NS@omnikit"
+  PLUGIN_DIR="$REPO_ROOT/plugins/$NS"
+  INSTALL_ARGS=(--kit "$KIT")
+  if [ ! -f "$PLUGIN_DIR/.claude-plugin/plugin.json" ]; then
+    say "error: no kit named $KIT ($PLUGIN_DIR/.claude-plugin/plugin.json not found)"
+    exit 1
+  fi
+fi
 
 if ! has jq; then
   say "error: jq not found. Install it (Windows: winget install jqlang.jq, then open a new shell)."
@@ -84,8 +107,15 @@ if [ -n "$common" ]; then
   MAIN_ROOT="$(cd "$common/.." && pwd -P)"
 fi
 
-mapfile -t SKILLS < <(find "$SRC/skills" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
-mapfile -t AGENTS < <(find "$SRC/agents" -mindepth 1 -maxdepth 1 -name '*.md' -printf '%f\n' | sed 's/\.md$//' | sort)
+# A kit's plugin tree holds exactly its skills and agents; the whole plugin
+# carries every source skill and agent.
+if [ -n "$KIT" ]; then
+  mapfile -t SKILLS < <(find "$PLUGIN_DIR/skills" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+  mapfile -t AGENTS < <(find "$PLUGIN_DIR/agents" -mindepth 1 -maxdepth 1 -name '*.md' -printf '%f\n' | sed 's/\.md$//' | sort)
+else
+  mapfile -t SKILLS < <(find "$SRC/skills" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+  mapfile -t AGENTS < <(find "$SRC/agents" -mindepth 1 -maxdepth 1 -name '*.md' -printf '%f\n' | sed 's/\.md$//' | sort)
+fi
 
 # agents_for <host>: the source agents built for <host>. A `hosts:` list in an
 # agent's frontmatter limits it to those hosts; no list means every host.
@@ -138,7 +168,7 @@ check_build() {
 check_install() {
   say ""
   say "install.sh --check"
-  if bash "$REPO_ROOT/install.sh" --check > "$SCRATCH/check.tsv" 2> /dev/null; then
+  if bash "$REPO_ROOT/install.sh" --check "${INSTALL_ARGS[@]}" > "$SCRATCH/check.tsv" 2> /dev/null; then
     result pass install-check "no missing, stale, legacy, or nested entries"
   else
     result fail install-check "$(tr '\t\n' ' ;' < "$SCRATCH/check.tsv")"
@@ -224,7 +254,10 @@ check_claude() {
     result fail claude-init-plugin "$PLUGIN_ID not loaded"
   fi
 
-  if jq -e --arg t "$WORKER_TOOL" 'any(.tools[]; . == $t)' "$init" > /dev/null; then
+  # Kits carry no hooks, so only the whole plugin registers the worker tool.
+  if [ -n "$KIT" ]; then
+    result skip claude-worker-tool "kits register no tools"
+  elif jq -e --arg t "$WORKER_TOOL" 'any(.tools[]; . == $t)' "$init" > /dev/null; then
     result pass claude-worker-tool "$WORKER_TOOL"
   else
     result fail claude-worker-tool "$WORKER_TOOL missing"

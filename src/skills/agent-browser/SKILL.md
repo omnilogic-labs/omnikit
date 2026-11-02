@@ -11,7 +11,16 @@ If your host has a browser-buddy subagent, prefer delegating anything beyond one
 
 ## Setup
 
+<!-- @if kit:full -->
+
 Run `./setup-browser-buddy.sh` once from the omnikit repo root (installs dependencies and Chrome). If the command is missing, call `plugins/omnilogic-labs/bin/agent-browser` directly. On Linux, if Chrome fails to launch, run `agent-browser install --with-deps`. When anything looks wrong (`Unknown command`, `Failed to connect`, stale daemon), run `agent-browser doctor` first (`--offline --quick` for a fast check).
+
+<!-- @endif -->
+<!-- @if kit:essentials -->
+
+On a machine with this kit, `agent-browser` and Chrome are already installed, so do not install or set them up. If the `agent-browser` command is missing, tell the person the browser is not set up on this machine. When anything looks wrong (`Unknown command`, `Failed to connect`, stale daemon), run `agent-browser doctor` first (`--offline --quick` for a fast check).
+
+<!-- @endif -->
 
 ## Core loop
 

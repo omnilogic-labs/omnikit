@@ -11,6 +11,11 @@
 #                 ~/.gemini/config/skills and ~/.gemini/config/agents. It does
 #                 not read ~/.agents/skills.
 #
+# --kit <name> installs one smaller kit instead (plugins/omnilogic-labs-<name>):
+# its plugin for Claude Code, and only its skills and agents for Codex and agy.
+# One kit at a time: installing a kit removes the whole plugin, and the default
+# install removes any kit.
+#
 # The build runs first, so an edit under src/ goes live on the next run.
 # OMNIKIT_OS=linux|wsl|macos|windows overrides the detected OS.
 #
@@ -29,7 +34,7 @@ SKILLS_SRC="$REPO_ROOT/plugins/omnilogic-labs/skills"
 DIST="$REPO_ROOT/dist"
 MARKETPLACE="omnikit"
 PLUGIN="omnilogic-labs"
-PLUGIN_ID="$PLUGIN@$MARKETPLACE"
+KIT=""
 
 DO_CLAUDE=false
 DO_AGENTS=false
@@ -62,6 +67,13 @@ Targets (default: every tool found on PATH):
                     ~/.gemini/config/skills and each agent into
                     ~/.gemini/config/agents
 
+Kit (default: everything):
+  --kit <name>      install one kit instead of everything: the
+                    omnilogic-labs-<name> plugin for Claude Code, and only that
+                    kit's skills and agents for Codex and agy. Installing a kit
+                    removes the whole plugin, and installing without --kit
+                    removes any kit. Kits: essentials
+
 Options:
   --check           report missing, stale, and legacy links, a stale build
                     (stale-build) and a dist/ built for another OS (wrong-os);
@@ -84,6 +96,16 @@ while [ $# -gt 0 ]; do
     --claude) DO_CLAUDE=true && TARGETED=true ;;
     --agents | --codex) DO_AGENTS=true && TARGETED=true ;;
     --agy) DO_AGY=true && TARGETED=true ;;
+    --kit)
+      if [ -z "${2:-}" ]; then
+        say "error: --kit needs a name"
+        usage
+        exit 1
+      fi
+      KIT="$2"
+      shift
+      ;;
+    --kit=*) KIT="${1#--kit=}" ;;
     --check) CHECK=true ;;
     --no-deps) DEPS=false ;;
     --deps) DEPS=true ;;
@@ -104,6 +126,30 @@ while [ $# -gt 0 ]; do
 done
 
 has() { command -v "$1" > /dev/null 2>&1; }
+
+# The kit's plugin tree holds exactly the skills and agents it carries, so it
+# also tells Codex and agy which links to make. "full" means everything.
+[ "$KIT" = full ] && KIT=""
+KIT_DIR=""
+if [ -n "$KIT" ]; then
+  PLUGIN="omnilogic-labs-$KIT"
+  KIT_DIR="$REPO_ROOT/plugins/$PLUGIN"
+  if [ ! -f "$KIT_DIR/.claude-plugin/plugin.json" ]; then
+    say "error: no kit named $KIT ($KIT_DIR/.claude-plugin/plugin.json not found)"
+    exit 1
+  fi
+fi
+PLUGIN_ID="$PLUGIN@$MARKETPLACE"
+
+# in_kit <skills|agents> <entry-name>: true when the chosen kit carries this
+# generated skill folder or agent file (any extension). Always true without a kit.
+in_kit() {
+  [ -n "$KIT_DIR" ] || return 0
+  case "$1" in
+    skills) [ -d "$KIT_DIR/skills/$2" ] ;;
+    agents) [ -f "$KIT_DIR/agents/${2%.*}.md" ] ;;
+  esac
+}
 
 # Windows (Git Bash, MSYS2, Cygwin). Plain `ln -s` there silently copies the
 # directory instead of linking it, so the copy goes stale on the next edit and
@@ -299,14 +345,16 @@ dist_entries() {
   find "$dir" -mindepth 1 -maxdepth 1 -name "$pattern" | sort
 }
 
-# link_all <target-dir> <src-dir> <pattern>: links each entry of <src-dir>
-# matching <pattern> into <target-dir>, then prunes links of ours in
-# <target-dir> that are no longer generated.
+# link_all <target-dir> <src-dir> <pattern> <skills|agents>: links each entry
+# of <src-dir> matching <pattern> (and in the chosen kit, if any) into
+# <target-dir>, then prunes links of ours in <target-dir> that are no longer
+# generated or not in the kit.
 link_all() {
-  local dir="$1" srcdir="$2" pattern="$3" names=() src name
+  local dir="$1" srcdir="$2" pattern="$3" kind="$4" names=() src name
   $DRY_RUN || mkdir -p "$dir"
   while IFS= read -r src; do
     name="$(basename "$src")"
+    in_kit "$kind" "$name" || continue
     names+=("$name")
     link_into "$dir" "$src" "$name"
   done < <(dist_entries "$srcdir" "$pattern")
@@ -369,7 +417,7 @@ remove_claude_legacy() {
 install_claude() {
   local plugins marketplaces id
   say ""
-  say "Claude Code ($CLAUDE_DIR)"
+  say "Claude Code ($CLAUDE_DIR, plugin $PLUGIN_ID)"
   remove_claude_legacy
   $CHECK && return 0
 
@@ -404,7 +452,8 @@ install_claude() {
     run claude plugin marketplace add "$(native_path "$REPO_ROOT")"
   fi
 
-  # Plugins from earlier versions of this marketplace (one per skill group).
+  # Every other plugin of this marketplace: the whole plugin or another kit, and
+  # plugins from earlier versions (one per skill group). One kit at a time.
   while IFS= read -r id; do
     [ -n "$id" ] && [ "$id" != "$PLUGIN_ID" ] || continue
     run claude plugin uninstall "$id"
@@ -420,9 +469,9 @@ install_claude() {
 install_agents() {
   say ""
   say "Codex ($AGENTS_SKILLS_DIR, $CODEX_AGENTS_DIR)"
-  link_all "$AGENTS_SKILLS_DIR" "$DIST/codex/skills" '*'
+  link_all "$AGENTS_SKILLS_DIR" "$DIST/codex/skills" '*' skills
   # Codex loads custom agents from ~/.codex/agents/<name>.toml.
-  link_all "$CODEX_AGENTS_DIR" "$DIST/codex/agents" '*.toml'
+  link_all "$CODEX_AGENTS_DIR" "$DIST/codex/agents" '*.toml' agents
 
   # Codex reads ~/.agents/skills too; older installs linked here as well, and
   # a skill in both shows up twice.
@@ -433,8 +482,8 @@ install_agents() {
 install_agy() {
   say ""
   say "Antigravity CLI ($AGY_SKILLS_DIR, $AGY_AGENTS_DIR)"
-  link_all "$AGY_SKILLS_DIR" "$DIST/agy/skills" '*'
-  link_all "$AGY_AGENTS_DIR" "$DIST/agy/agents" '*.md'
+  link_all "$AGY_SKILLS_DIR" "$DIST/agy/skills" '*' skills
+  link_all "$AGY_AGENTS_DIR" "$DIST/agy/agents" '*.md' agents
 }
 
 # Codex walks each skill directory several levels deep, so a node_modules
@@ -467,6 +516,7 @@ remove_gemini_cli_legacy() {
 say "Omnikit Installer"
 say "================="
 say "Source: $REPO_ROOT"
+say "Kit:    ${KIT:-full (everything)}"
 if $CHECK; then
   say "Mode:   check, nothing will be written"
 elif $DRY_RUN; then

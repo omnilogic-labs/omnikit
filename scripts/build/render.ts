@@ -22,7 +22,16 @@ export interface RenderOptions {
   file: string;
   /** Every known host name. */
   hosts: readonly string[];
+  /** Kit being rendered (see kits.ts); "full" (the default) is the whole omnilogic-labs plugin. */
+  kit?: string;
+  /** Every known kit name, "full" included. Defaults to ["full"]. */
+  kits?: readonly string[];
 }
+
+/** The kit name of the whole plugin, what every tree but a kit's renders as. */
+export const FULL_KIT = "full";
+/** Prefix that marks an @if list as naming kits, as in `<!-- @if kit:full -->`. */
+const KIT_PREFIX = "kit:";
 
 const DIRECTIVE = /^(\s*)<!--\s*@(\S+)(.*?)-->\s*$/;
 const VAR = /\{\{\s*([^{}\s]*)\s*\}\}/g;
@@ -34,24 +43,42 @@ export function formatError(e: RenderError): string {
 interface Condition {
   hosts: string[] | null;
   oses: OsName[] | null;
+  kits: string[] | null;
 }
 
 /**
  * Parse the argument of an @if: up to two space-separated comma lists, one per axis, in any
- * order. Commas are OR within an axis; the two lists are ANDed.
+ * order. Commas are OR within an axis; the two lists are ANDed. A third list, written
+ * `kit:<name>[,<name>...]`, names kits and is ANDed too.
  */
-function parseCondition(rest: string, hosts: readonly string[]): Condition | string[] {
+function parseCondition(
+  rest: string,
+  hosts: readonly string[],
+  kits: readonly string[]
+): Condition | string[] {
   const problems: string[] = [];
-  const lists = rest
+  const all = rest
     .trim()
     .replace(/\s*,\s*/g, ",")
     .split(/\s+/)
     .filter(Boolean);
-  if (lists.length === 0) return ["@if names no host or OS"];
+  const kitLists = all.filter((l) => l.startsWith(KIT_PREFIX));
+  const lists = all.filter((l) => !l.startsWith(KIT_PREFIX));
+  if (all.length === 0) return ["@if names no host or OS"];
   if (lists.length > 2) {
     return [`@if takes at most two lists (one of hosts, one of OSes), got ${lists.length}`];
   }
-  const cond: Condition = { hosts: null, oses: null };
+  const cond: Condition = { hosts: null, oses: null, kits: null };
+  if (kitLists.length > 1) problems.push("@if has two kit lists; join them with commas");
+  else if (kitLists.length === 1) {
+    const names = kitLists[0].slice(KIT_PREFIX.length).split(",").filter(Boolean);
+    const unknown = names.filter((n) => !kits.includes(n));
+    if (names.length === 0) problems.push(`@if list "${kitLists[0]}" names no kit`);
+    for (const n of unknown) {
+      problems.push(`unknown kit "${n}" in @if (kits: ${kits.join(", ")})`);
+    }
+    if (names.length && !unknown.length) cond.kits = names;
+  }
   for (const list of lists) {
     const names = list.split(",").filter(Boolean);
     const isHost = names.map((n) => hosts.includes(n));
@@ -101,6 +128,8 @@ interface Open {
 export function render(text: string, opts: RenderOptions): RenderResult {
   const { host, vars, file, hosts } = opts;
   const os = opts.os ?? "any";
+  const kit = opts.kit ?? FULL_KIT;
+  const kits = opts.kits ?? [FULL_KIT];
   const errors: RenderError[] = [];
   const out: string[] = [];
   const lines = text.split(/(?<=\n)/);
@@ -142,7 +171,7 @@ export function render(text: string, opts: RenderOptions): RenderResult {
           });
           return;
         }
-        const cond = parseCondition(rest, hosts);
+        const cond = parseCondition(rest, hosts, kits);
         if (Array.isArray(cond)) {
           for (const message of cond) errors.push({ file, line: lineNo, message });
           open = { line: lineNo, keep: false, os: null, hasOs: false };
@@ -150,7 +179,8 @@ export function render(text: string, opts: RenderOptions): RenderResult {
         }
         const hostOk = cond.hosts === null || cond.hosts.includes(host);
         const osOk = cond.oses === null || os === "any" || cond.oses.includes(os);
-        const keep = hostOk && osOk;
+        const kitOk = cond.kits === null || cond.kits.includes(kit);
+        const keep = hostOk && osOk && kitOk;
         open = {
           line: lineNo,
           keep,

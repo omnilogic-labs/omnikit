@@ -10,12 +10,14 @@
 // any-OS: per skill, a dispatcher SKILL.md plus platforms/<host>.md bodies. --check builds into a
 // temp dir and exits 1, listing every path under the committed trees (the Claude plugin and root
 // skills/) whose content or executable bit differs from the fresh build. The coordinator skill also
-// gets each role's rendered agent body (no frontmatter) as roles/<role>.md in every tree.
+// gets each role's rendered agent body (no frontmatter) as roles/<role>.md in every tree. Each kit
+// in kits.ts gets its own Claude plugin tree, plugins/<plugin>/{skills,agents,bin}, committed and
+// checked like the whole plugin.
 
 import { readFileSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { platform, tmpdir } from "node:os";
-import { dirname, join, relative, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import * as prettier from "prettier";
 import {
   CAPABILITIES,
@@ -27,6 +29,7 @@ import {
   type Tier,
   varsFor,
 } from "./hosts";
+import { KITS, type Kit, kitNames, kitRoot } from "./kits";
 import {
   OS_TARGETS,
   type OsName,
@@ -39,6 +42,7 @@ import {
 import {
   filterFrontmatter,
   formatError,
+  FULL_KIT,
   joinFrontmatter,
   render,
   splitFrontmatter,
@@ -106,13 +110,18 @@ export function osForHost(host: Host, os: OsTarget): OsTarget {
   return isLocalTree(host) ? os : "any";
 }
 
-function renderFor(text: string, name: HostName, os: OsTarget, file: string) {
+/** Kit names a template may use; set by compile from the kits it builds. */
+let kitsKnown: string[] = kitNames();
+
+function renderFor(text: string, name: HostName, os: OsTarget, file: string, kit = FULL_KIT) {
   return render(text, {
     host: name,
     os: osForHost(HOSTS[name], os),
     vars: varsFor(name),
     file,
     hosts: HOST_NAMES,
+    kit,
+    kits: kitsKnown,
   });
 }
 
@@ -379,7 +388,14 @@ async function roleBody(
     });
     return null;
   }
-  const r = render(text, { host: name, os, vars: varsFor(name), file, hosts: HOST_NAMES });
+  const r = render(text, {
+    host: name,
+    os,
+    vars: varsFor(name),
+    file,
+    hosts: HOST_NAMES,
+    kits: kitsKnown,
+  });
   if (!r.ok) {
     errors.push(...r.errors);
     return null;
@@ -465,6 +481,7 @@ async function buildPortable(src: string, out: Outputs, errors: RenderError[]) {
           vars: varsFor(name),
           file,
           hosts: HOST_NAMES,
+          kits: kitsKnown,
         });
         if (!r.ok) {
           errors.push(...r.errors);
@@ -532,6 +549,83 @@ async function portableRoles(
   }
 }
 
+// ---------- kits ----------
+
+/**
+ * The kits a build of src makes: the kit table names this repo's own src/, so a build of any
+ * other source tree (a test fixture) makes none unless it passes its own.
+ */
+export function kitsFor(src: string): readonly Kit[] {
+  return resolve(src) === join(REPO_ROOT, "src") ? KITS : [];
+}
+
+/**
+ * Emit one kit's Claude plugin tree: its skills and agents rendered for Claude Code, any-OS, as
+ * kit <name>, and its bin files copied from the whole plugin's bin/ (next to src/).
+ */
+async function buildKit(src: string, kit: Kit, out: Outputs, errors: RenderError[]) {
+  const host: Host = { ...HOSTS.claude, root: kitRoot(kit) };
+  const fail = (message: string) =>
+    errors.push({ file: join(dirname(import.meta.path), "kits.ts"), line: 1, message });
+  for (const skill of kit.skills) {
+    const dir = join(src, "skills", skill);
+    const files = await walk(dir);
+    if (files.length === 0) {
+      fail(`kit ${kit.name} names skill "${skill}", which ${dir} does not have`);
+      continue;
+    }
+    for (const rel of files) {
+      const file = join(dir, rel);
+      const s = await stat(file);
+      const bytes = await readFile(file);
+      const dest = `${host.root}/skills/${skill}/${rel}`;
+      if (!rel.endsWith(".md")) {
+        out.set(dest, { data: new Uint8Array(bytes), mode: s.mode });
+        continue;
+      }
+      const r = renderFor(bytes.toString("utf8"), "claude", "any", file, kit.name);
+      if (!r.ok) {
+        errors.push(...r.errors);
+        continue;
+      }
+      const data =
+        rel === "SKILL.md" ? filterFrontmatter(r.text, host.skillFrontmatterKeys) : r.text;
+      out.set(dest, { data, mode: s.mode });
+    }
+  }
+  for (const role of kit.agents) {
+    const file = join(src, "agents", `${role}.md`);
+    const text = await readFile(file, "utf8").catch(() => null);
+    if (text === null) {
+      fail(`kit ${kit.name} names agent "${role}", which ${file} does not have`);
+      continue;
+    }
+    if (!targetHosts(text).includes("claude")) {
+      fail(`kit ${kit.name} names agent "${role}", which is not built for claude`);
+      continue;
+    }
+    const r = renderFor(text, "claude", "any", file, kit.name);
+    if (!r.ok) {
+      errors.push(...r.errors);
+      continue;
+    }
+    for (const [k, v] of emitAgent(role, r.text, file, host, errors)) out.set(k, v);
+  }
+  const binDir = join(resolve(src), "..", HOSTS.claude.root, "bin");
+  for (const name of kit.bin) {
+    const file = join(binDir, name);
+    const s = await stat(file).catch(() => null);
+    if (!s) {
+      fail(`kit ${kit.name} names bin file "${name}", which ${binDir} does not have`);
+      continue;
+    }
+    out.set(`${host.root}/bin/${name}`, {
+      data: new Uint8Array(await readFile(file)),
+      mode: s.mode,
+    });
+  }
+}
+
 // ---------- prettier ----------
 
 let prettierConfig: prettier.Options | null = null;
@@ -561,13 +655,16 @@ async function formatOutputs(out: Outputs) {
 /** Compile src into an in-memory file map. Throws nothing; returns errors instead. */
 export async function compile(
   src: string,
-  os: OsTarget = "any"
+  os: OsTarget = "any",
+  kits: readonly Kit[] = kitsFor(src)
 ): Promise<{ out: Outputs; errors: string[] }> {
   const out: Outputs = new Map();
   const errs: RenderError[] = [];
+  kitsKnown = kitNames(kits);
   await buildSkills(src, os, out, errs);
   await buildAgents(src, os, out, errs);
   await buildRolePrompts(src, os, out, errs);
+  for (const kit of kits) await buildKit(src, kit, out, errs);
   for (const name of HOST_NAMES) {
     const host = HOSTS[name];
     if (!isLocalTree(host)) continue;
@@ -583,25 +680,43 @@ export async function compile(
   return { out, errors: all };
 }
 
-export function outputDirs(): string[] {
+/** Each kit's generated dirs: its skills/, agents/ and bin/. */
+function kitDirs(kits: readonly Kit[]): string[] {
+  return kits.flatMap((k) => [
+    `${kitRoot(k)}/skills`,
+    `${kitRoot(k)}/agents`,
+    ...(k.bin.length ? [`${kitRoot(k)}/bin`] : []),
+  ]);
+}
+
+export function outputDirs(kits: readonly Kit[] = KITS): string[] {
   return [
     ...HOST_NAMES.flatMap((h) => [`${HOSTS[h].root}/skills`, `${HOSTS[h].root}/agents`]),
     PORTABLE_ROOT,
+    ...kitDirs(kits),
   ];
 }
 
 /** Generated dirs that are committed, and so compared by --check. */
-export function committedDirs(): string[] {
+export function committedDirs(kits: readonly Kit[] = KITS): string[] {
   const claude = HOSTS.claude.root;
-  return [`${claude}/skills`, `${claude}/agents`, PORTABLE_ROOT];
+  return [`${claude}/skills`, `${claude}/agents`, PORTABLE_ROOT, ...kitDirs(kits)];
 }
 
-/** Build src into outDir. Wipes only the generated skills/ and agents/ dirs of each host. */
-export async function build(src: string, outDir: string, os: OsTarget = "any"): Promise<string[]> {
-  const { out, errors } = await compile(src, os);
+/**
+ * Build src into outDir. Wipes only the generated dirs: each host's skills/ and agents/, the root
+ * skills/, and each kit's skills/, agents/ and bin/.
+ */
+export async function build(
+  src: string,
+  outDir: string,
+  os: OsTarget = "any",
+  kits: readonly Kit[] = kitsFor(src)
+): Promise<string[]> {
+  const { out, errors } = await compile(src, os, kits);
   if (errors.length) return errors;
-  for (const d of outputDirs()) await rm(join(outDir, d), { recursive: true, force: true });
-  for (const d of outputDirs()) await mkdir(join(outDir, d), { recursive: true });
+  for (const d of outputDirs(kits)) await rm(join(outDir, d), { recursive: true, force: true });
+  for (const d of outputDirs(kits)) await mkdir(join(outDir, d), { recursive: true });
   for (const [path, f] of out) {
     const dest = join(outDir, path);
     await mkdir(dirname(dest), { recursive: true });
@@ -629,10 +744,11 @@ async function isExecutable(dir: string, rel: string): Promise<boolean> {
  */
 export async function diffCommittedTrees(
   builtDir: string,
-  committedDir: string
+  committedDir: string,
+  kits: readonly Kit[] = KITS
 ): Promise<string[]> {
   const diffs: string[] = [];
-  for (const sub of committedDirs()) {
+  for (const sub of committedDirs(kits)) {
     const a = join(builtDir, sub);
     const b = join(committedDir, sub);
     const files = [...new Set([...(await walk(a)), ...(await walk(b))])].sort();
@@ -723,7 +839,7 @@ async function main() {
         for (const e of errors) console.error(e);
         process.exit(1);
       }
-      const diffs = await diffCommittedTrees(tmp, opts.out);
+      const diffs = await diffCommittedTrees(tmp, opts.out, kitsFor(opts.src));
       if (diffs.length) {
         console.error(`build: ${diffs.length} generated file(s) out of date:`);
         for (const d of diffs) console.log(d);
@@ -752,7 +868,7 @@ async function main() {
     process.exit(1);
   }
   console.error(
-    `build: wrote ${outputDirs().join(", ")} under ${opts.out} (dist OS: ${os} (${source}))`
+    `build: wrote ${outputDirs(kitsFor(opts.src)).join(", ")} under ${opts.out} (dist OS: ${os} (${source}))`
   );
 }
 
