@@ -58,6 +58,12 @@ replies, this session receives a message listing the item, the owner's status an
 the owner's words. Act on it, then resolve the item or update it with what happens next. `action: "list"` shows
 your items with the owner's status at any time; `all: true` lists every session's.
 
+## Items that block tracked work
+
+When an item blocks a task or run that a coordinator tracks in a ledger, put the issue (or task) in `links` and
+name it in the body. When the owner replies, copy the reply verbatim to that issue as a ruling (the coordinator
+skill's `scripts/ledger ruling <task> - --by "inbox"`) before acting on it, so the decision stays with the work.
+
 ## Moving from a hand-made inbox page
 
 Add each open item from the old page with `add`, in its section, then stop republishing the old page. Tell the

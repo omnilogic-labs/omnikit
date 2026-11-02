@@ -2,9 +2,9 @@
 name: coordinator
 description: >-
   Run a multi-step build as a coordinator: dispatch planner, builder and
-  verifier workers, each builder in its own git worktree, integrate one wave at
-  a time, and track state in LEDGER.md. Use when asked to coordinate, run the
-  plan or the queue, work through a backlog, or resume a coordinator.
+  verifier workers, each builder in its own git worktree, land one wave at a
+  time, and track state in GitHub issues or a local ledger. Use to coordinate,
+  run a plan or queue, work a backlog, or resume a coordinator.
 ---
 
 # coordinator

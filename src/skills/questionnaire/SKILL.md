@@ -58,7 +58,9 @@ Say what you need back: "Answer what you can, then press Copy answers and paste 
 
 ## When the answers come back
 
-Act on each answer. For `I don't know`, apply the default the question stated. Read every `Note:` line: a note can
+When a coordinator ledger tracks the work, first paste the Answers block verbatim into the issue it decides
+(`scripts/ledger ruling <task|run> - --by "questionnaire"`). Then act on each answer. For `I don't know`, apply
+the default the question stated. Read every `Note:` line: a note can
 change how you carry out an answer. Unanswered questions are listed at the top. Ask again only about those, and only
 if they block you.
 

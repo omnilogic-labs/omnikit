@@ -24,7 +24,7 @@ export interface Kit {
 export const KITS: Kit[] = [
   {
     // For people who are not developers: how the agent writes, images, and a browser. No
-    // coordinator (its ledger conflicts when two people use it) and no external runner.
+    // coordinator (it assumes git worktrees and a developer at the keyboard) and no external runner.
     name: "essentials",
     plugin: "omnilogic-labs-essentials",
     skills: ["agent-browser", "artistic-vision", "plain-writing"],

@@ -24,7 +24,8 @@ do that in their own contexts and send back short reports.
 5. **Two failed verify rounds on a task mean the planner rescopes it.** Do not send it to a builder a third time.
 6. **Integrate one wave at a time.** Rebase each task onto the integration branch, run the repo check command,
    then fast-forward the base branch. History stays linear and keeps the builders' commits.
-7. **Track state in LEDGER.md.** Update it after every dispatch, report, merge, and block.
+7. **Track state with `scripts/ledger` only:** a run issue and one issue per task (or `.agents/ledger.md`). State
+   changes are silent label edits; only results are comments. Never read whole issue threads; ask the helper.
 8. **Stop only for an owner decision, a missing credential, or a broken base branch.** Otherwise keep going.
 9. **Do not dispatch duplicate workers.** Before dispatching, check what is already running.
 
@@ -48,36 +49,39 @@ models. Read hosts.md once at the start.
 
 1. Read `.agents/coordinator.md` if it exists. It holds the base branch, max lanes, check command, push policy,
    and provision and teardown commands. `references/config.md` documents each setting and its default.
-2. Read `LEDGER.md` if it exists, and resume from it. Otherwise copy `references/ledger-template.md` to
-   `LEDGER.md` and fill in the goal.
-3. Check what is already running: live workers from this session, and `scripts/wt list` for existing worktrees.
-   A task that already has a running worker is not dispatched again.
+2. Run `scripts/ledger status` and resume from its output alone (`references/ledger.md` explains it). With no
+   run, the plan's import starts one.
+3. Check what is already running: live workers from this session, and `scripts/wt list`. Never give a task two
+   workers. After a restart none survive, so a `building` or `verifying` task is redispatched in its worktree.
 
 ## The loop
 
-1. **Plan.** If there is no plan, dispatch a planner with the goal. It writes the plan to a file and replies
-   with the file path, the task list, and the waves. Record each task as `planned` in the ledger. Commit the
-   plan file and LEDGER.md to the base branch. After that, keep LEDGER.md current on disk and commit it only
-   when a wave lands, at a milestone, and when you stop or finish, with a message that says what happened (for
-   example `Land wave 2: schema and design system; 05 blocked on a Gemini key`), not a bare state change.
+1. **Plan.** If there is no plan, dispatch a planner with the goal and a path in the plan dir (default
+   `.agents/plans/`, never committed). It replies with the path, the task list, and the waves. Run
+   `scripts/ledger import <plan>`: it opens the run if needed, files one task issue per task as `planned`, and
+   prints each task's reference. Nothing is committed.
 2. **Build.** For each task in the current wave whose dependencies are `merged`, up to max lanes at once:
    - create a worktree with `scripts/wt create <task>` (`scripts/` is relative to this SKILL.md's directory, not the repo root), which prints its path;
-   - pick the tier the plan gives: fast for rote work, deep for anything complicated;
-   - dispatch a builder with the plan path, the task name, and the worktree path;
-   - mark the task `building`.
-3. **Verify.** When a builder reports done, dispatch a verifier on the same worktree and mark the task
-   `verifying`. The verifier gets the plan path and task name, never the builder's claims.
-4. **Fix.** On any FAIL, UNVERIFIED, MISSES, or UNJUDGED, send those lines back to the builder and mark the task
-   `fixing (round n)`. After the second failed round, dispatch a planner to rescope instead.
-5. **Pass.** When every check is PASS and every judged goal is MEETS or CLOSE, mark the task `passed`. Record each
-   CLOSE and its reasons in the ledger for the owner's milestone look.
+   - dispatch a builder on the tier the plan gives, with the task reference (`scripts/ledger ref <task>`) and the
+     worktree path;
+   - `scripts/ledger state <task> building`.
+3. **Verify.** Post the builder's reply with `ledger note <task> - --head "Builder (<tier>), <branch>, <sha>"`,
+   dispatch a verifier on the same worktree with the task reference (never the builder's claims), and set
+   `verifying`.
+4. **Fix.** Post every verdict with `ledger note <task> - --head "Verify round n: PASS|FAIL"`. On any FAIL,
+   UNVERIFIED, MISSES, or UNJUDGED, send those lines back to the builder and set `fixing --round n`. After the
+   second failed round, dispatch a planner to rescope; import its plan and set the old task `dropped`.
+5. **Pass.** When every check is PASS and every judged goal is MEETS or CLOSE, set `passed`. CLOSE lines stay in
+   the verdict comment; `ledger status` lists them for the owner's milestone look.
 6. **Integrate.** When the whole wave is `passed`:
    - create an integration worktree with `scripts/wt create <wave>`;
    - run `scripts/wt land <task> --into <prefix><wave>` for each task: it rebases the task branch onto the
      integration branch and fast-forwards it;
    - dispatch a builder to run the check command there and fix trivial breakage only;
    - fast-forward the base branch to the integration branch: `git merge --ff-only <prefix><wave>`;
-   - mark each task `merged`, then `scripts/wt remove` each task and integration worktree. When the work is done, only the base branch remains: no leftover branches or worktrees.
+   - `scripts/ledger land <wave> <sha> <tasks...> --check "<one line>"` closes the tasks and posts one result on
+     the run; then `scripts/wt remove` each task and integration worktree. When the work is done, only the base
+     branch remains: no leftover branches or worktrees.
 
    If `wt land` refuses because two branches touched the same files, or the rebase conflicts, have a builder run
    `git rebase <prefix><wave>` in the task's worktree, resolve the conflicts, rerun the task's checks, and commit;
@@ -85,10 +89,12 @@ models. Read hosts.md once at the start.
 
 7. **Review.** At a milestone, dispatch a verifier on the deep tier to check the milestone's criteria on
    the integrated base branch. For judged goals, also get a second independent look from another model when
-   one is available, then show the owner the result next to the reference, with each CLOSE from the ledger (the questionnaire
-   skill builds that page).
-   The owner's judgement decides; record it in the ledger.
-8. **Repeat** with the next wave. Push only as the push policy says.
+   one is available, then show the owner the result next to the reference, with each CLOSE from the ledger (the
+   questionnaire skill builds that page). The owner's judgement decides. Record it, and every owner ruling, with
+   `ledger ruling <task|run> - --by "in chat"` (or `"relayed by <session>"`) in the owner's exact words, never
+   summarised. Durable product rulings also go in the repo's AGENTS.md.
+8. **Repeat** with the next wave. Push only as the push policy says. Keep the run's "Now" section current with
+   `ledger now -` (a few lines: what is in flight, what is next), so a fresh context resumes from `status`.
 
 ## Stopping
 
@@ -98,18 +104,17 @@ Stop only when one of these is true:
 - a credential or account is missing;
 - the base branch is broken and a builder could not fix it.
 
-Mark the affected task `blocked`, write the reason in the ledger, and keep running every task that does not
-depend on it. When nothing runnable is left, report to the owner in five lines or fewer: what merged, what is
-blocked and why, and the exact decision or credential you need.
+Set the task `blocked`, post the reason with `ledger note`, post an inbox item that links the task, and keep
+running every task that does not depend on it. When nothing runnable is left, report to the owner in five lines
+or fewer: what merged, what is blocked and why, and the exact decision or credential you need.
 
 ## Finishing
 
 When every task is `merged` and the milestone review passes:
 
-1. Report to the owner: what merged, and anything left for them.
-2. `git rm` the plan files, including side files such as `plan/*-facts.md`.
-3. Reset LEDGER.md to the empty template from `references/ledger-template.md`.
-4. Commit on the base branch, so only the base branch, an empty ledger and no plans remain.
+1. Commit every still-true fact the run found (an id, a setting, why a design is so) to a runbook, contract or
+   AGENTS.md. Then close the run with a one-line result and delete its plan files (and `.agents/ledger.md`).
+2. Report to the owner: what merged, and anything left for them.
 
 ## Reading worker replies
 
@@ -132,10 +137,13 @@ stdout, so `scripts/wt list` is safe to parse. It is bash: on Windows run it fro
 
 The defaults are `../<repo>-worktrees/<name>` on `wave/<name>`; `.agents/coordinator.md` can change both.
 
+`scripts/ledger`, beside it, is your only way to write the ledger; run it the same way. `references/ledger.md`
+lists its commands.
+
 ## References
 
 - `references/hosts.md`: how to dispatch each role on this host.
 - `roles/`: the planner, builder and verifier prompts.
 - `references/models.md`: which model each tier means on each host.
-- `references/ledger-template.md`: the starting LEDGER.md.
+- `references/ledger.md`: the ledger helper, its labels, layouts and status output.
 - `references/config.md`: the `.agents/coordinator.md` settings.

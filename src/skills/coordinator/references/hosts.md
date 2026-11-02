@@ -3,8 +3,9 @@
 The role prompts are in this skill's folder: `roles/planner.md`, `roles/builder.md` and `roles/verifier.md`. Each
 holds the role's prompt body, with no frontmatter.
 
-Every dispatch prompt names three things: the plan file, the task name, and the worktree path. Ask for a reply of
-ten lines or fewer.
+Every dispatch prompt names two things: the task reference that `scripts/ledger ref <task>` prints (an issue,
+`owner/repo#n`, which the worker reads with `gh issue view`; or in file mode `<plan path>#<task>`) and the worktree
+path. Ask for a reply of ten lines or fewer.
 
 | Role     | Tier                                                  |
 | -------- | ----------------------------------------------------- |
