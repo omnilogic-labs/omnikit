@@ -15,13 +15,13 @@ J="$(jq_arg "$@")"
 out() { if [ -n "$J" ]; then jq -r "$J"; else cat; fi; }
 case "$1 $2" in
   "auth token") echo token ;;
-  "issue list") out < "$STUB/issues.json" ;;
+  "issue list") if [ -n "$STUB_LAG" ]; then echo '[]' | out; else out < "$STUB/issues.json"; fi ;;
   "issue create")
     n=$(( $(jq length "$STUB/issues.json") + 100 ))
     t=""; while [ $# -gt 0 ]; do [ "$1" = --title ] && t="$2"; shift; done
     jq --arg t "$t" --argjson n $n '. + [{number: $n, title: $t, body: ""}]' "$STUB/issues.json" > "$STUB/i.tmp" && mv "$STUB/i.tmp" "$STUB/issues.json"
     echo "https://github.com/o/r/issues/$n" ;;
-  "issue view") echo '{"id":"ID","body":"<!-- ledger:rulings -->\\n<!-- /ledger:rulings -->"}' | out ;;
+  "issue view") jq --argjson n "$3" '(map(select(.number == $n))[0] // {}) as $i | {id: "ID", state: "OPEN", title: ($i.title // ""), body: "<!-- ledger:rulings -->\\n<!-- /ledger:rulings -->"}' "$STUB/issues.json" | out ;;
   "issue comment") echo "https://github.com/o/r/issues/1#c" ;;
   "api graphql")
     if [[ "$*" == *"issues(first: 10"* ]]; then out < "$STUB/status.json"
@@ -49,7 +49,7 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-function ledger(args: string[], stdin = "") {
+function ledger(args: string[], stdin = "", extra: Record<string, string> = {}) {
   const p = Bun.spawnSync(["bash", LEDGER, ...args], {
     cwd: join(root, "repo"),
     stdin: new TextEncoder().encode(stdin),
@@ -58,6 +58,7 @@ function ledger(args: string[], stdin = "") {
       PATH: `${join(stub, "bin")}:${process.env.PATH}`,
       STUB: stub,
       LEDGER_THROTTLE: "0",
+      ...extra,
     },
   });
   return { code: p.exitCode, out: p.stdout.toString(), err: p.stderr.toString() };
@@ -109,6 +110,19 @@ test("import opens one run even when another import opened it first", () => {
   expect(ledger(["init", "Ship it"]).code).toBe(0);
   expect(ledger(["import", plan]).code).toBe(0);
   expect(creates().filter((c) => c.includes("--label run"))).toHaveLength(1);
+});
+
+test("init then import opens one run while the label list lags", () => {
+  // GitHub's label-filtered issue list missed a run opened seconds earlier, so
+  // import opened a second run (adaptig/platform #3 and #4).
+  const lag = { STUB_LAG: "1" };
+  expect(ledger(["init", "Ship it"], "", lag).code).toBe(0);
+  const plan = join(root, "plan.md");
+  writeFileSync(plan, PLAN("- **Goal:** Do alpha"));
+  expect(ledger(["import", plan], "", lag).code).toBe(0);
+  expect(ledger(["init", "Ship it"], "", lag).out.trim()).toBe("100");
+  expect(creates().filter((c) => c.includes("--label run"))).toHaveLength(1);
+  expect(calls().some((c) => c.startsWith("issue view 100 "))).toBe(true);
 });
 
 test("ruling accepts run as the target", () => {

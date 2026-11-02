@@ -53,6 +53,9 @@ MAIN="$(dirname "$MAIN")"
 CONFIG="$MAIN/.agents/coordinator.md"
 FILE="$MAIN/.agents/ledger.md"
 QUEUE="$MAIN/.agents/ledger-queue.jsonl"
+# The open run's number, written by init. GitHub's label-filtered issue list lags
+# behind a new issue, so a run opened a moment ago is read from here, not searched.
+RUNFILE="$MAIN/.agents/ledger-run"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 ZW="$(printf '\342\200\213')"
@@ -232,7 +235,15 @@ run_number() {
     echo "${RUN#\#}"
     return
   }
-  local runs
+  local runs saved
+  saved="$(cat "$RUNFILE" 2> /dev/null || true)"
+  if [ -n "$saved" ]; then
+    [ "$(gh issue view "$saved" -R "$REPO" --json state --jq .state 2> /dev/null)" = OPEN ] && {
+      echo "$saved"
+      return
+    }
+    rm -f "$RUNFILE"
+  fi
   runs="$(gh issue list -R "$REPO" --label run --state open --limit 20 --json number,title \
     --jq '.[] | "\(.number)\t\(.title)"')"
   [ -n "$runs" ] || die "no open run in $REPO; start one with 'ledger init <goal>'"
@@ -241,6 +252,13 @@ run_number() {
     die "more than one open run; pass --run N"
   fi
   printf '%s\n' "$runs" | cut -f1
+}
+
+# remember_run <n>: record the run init opened or reused, kept out of git.
+remember_run() {
+  mkdir -p "$MAIN/.agents"
+  exclude .agents/ledger-run
+  echo "$1" > "$RUNFILE"
 }
 
 # subissues <run>: number, state, task name and node id for each sub-issue.
@@ -322,15 +340,25 @@ gh_init() {
   run_body "$1" | quiet > "$TMP/body.md"
   local url n
   # Idempotent: reuse an open run with the same title instead of opening a second.
+  # The saved run comes first: the label list may not show a run opened seconds ago.
+  n="$(run_number 2> /dev/null)" && [ "$(gh issue view "$n" -R "$REPO" --json title --jq .title)" = "Run: $1" ] \
+    && {
+      say "run #$n is already open for this goal; reusing it"
+      remember_run "$n"
+      echo "$n"
+      return 0
+    }
   n="$(gh issue list -R "$REPO" --label run --state open --limit 50 --json number,title \
     --jq '.[] | "\(.number)\t\(.title)"' 2> /dev/null | awk -F'\t' -v t="Run: $1" '$2 == t { print $1; exit }')" || true
   if [ -n "$n" ]; then
     say "run #$n is already open for this goal; reusing it"
+    remember_run "$n"
     echo "$n"
     return 0
   fi
   url="$(gh issue create -R "$REPO" --title "Run: $1" --label run --body-file "$TMP/body.md")"
   say "opened run $url"
+  remember_run "${url##*/}"
   echo "${url##*/}"
 }
 
@@ -339,7 +367,8 @@ gh_import() {
   [ -f "$plan" ] || die "no such plan: $plan"
   parse_plan "$plan" "$TMP"
   [ -s "$TMP/tasks.tsv" ] || die "no '## Task: <name>' sections in $plan"
-  if [ -z "$RUN" ] && [ -z "$(gh issue list -R "$REPO" --label run --state open --json number --jq '.[].number')" ]; then
+  if [ -z "$RUN" ] && ! run_number > /dev/null 2>&1 \
+    && [ -z "$(gh issue list -R "$REPO" --label run --state open --json number --jq '.[].number')" ]; then
     goal="$(grep -m1 '\*\*Goal:\*\*' "$TMP/preamble.md" | sed 's/.*\*\*Goal:\*\*[[:space:]]*//')"
     RUN="$(gh_init "${goal:-$(basename "$plan" .md)}")"
   fi
