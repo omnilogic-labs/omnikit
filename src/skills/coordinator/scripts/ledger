@@ -551,7 +551,7 @@ def head: "#\(.number) \(.title)",
 def clean: gsub("<!--[^>]*-->\n?"; "") | sub("^\\s+"; "") | sub("\\s+$"; "");
 def trim($max): split("\n") | if $max > 0 and length > $max then .[:$max] + ["[\(length - $max) more lines; --full]"] else . end | join("\n");
 def brief: [split("\n")[] | select(test("^\\s*[-*]?\\s*\\*\\*(Goal|Wave|Tier|Depends on)(:\\*\\*|\\*\\*:)"))
-  | sub("^\\s*[-*]?\\s*"; "") | gsub("\\*\\*"; "") | .[:200]]
+  | sub("^\\s*([-*]\\s+)?"; "") | gsub("\\*\\*"; "") | .[:200]]
   | reduce .[] as $l ([]; if any(.[]; split(":")[0] == ($l | split(":")[0])) then . else . + [$l] end) | join("\n");
 def comment($max): "--- \(.createdAt[:10])", (.body | clean | trim($max));
 '
@@ -621,7 +621,7 @@ gh_grep() {
   run_tasks "$(run_number)" | jq -r --arg re "$re" "$LEAN_DEFS"'
     select('"$closed"' == 1 or .state == "OPEN") | . as $i
     | ([.title, (.body | clean)] + [.comments.nodes[] | .body]) | map(split("\n")[]) | .[]
-    | select(test($re; "i")) | "#\($i.number) \($i | tname): \(sub("^\\s*[-*>]?\\s*"; "") | gsub("\\*\\*"; "") | .[:160])"' \
+    | select(test($re; "i")) | "#\($i.number) \($i | tname): \(sub("^\\s*([-*>]\\s+)?"; "") | gsub("\\*\\*"; "") | .[:160])"' \
     | awk '{ print } NR == 60 { print "[more matches; narrow the pattern]"; exit }'
 }
 
@@ -699,7 +699,8 @@ gh_status() {
     def lbl(p): [.labels.nodes[].name | select(startswith(p)) | ltrimstr(p)];
     def st: if .state == "CLOSED" then (if .stateReason == "NOT_PLANNED" then "dropped" else "merged" end)
             else (lbl("state:")[0] // "planned") end;
-    def ref: "\(name) #\(.number)";
+    def ref: "\(name) #\(.number)" + ([lbl("tier:")[], (lbl("round:")[] | "round " + .)]
+      | if length == 0 then "" else " (\(join(", ")))" end);
     .data.repository.issues.nodes[] | '"$filter"' . as $r
     | [$r.subIssues.nodes[] | . + {s: st}] as $t
     | [$t[] | select(.s != "merged" and .s != "dropped")] as $open
@@ -710,7 +711,7 @@ gh_status() {
       "Wave now: \([$open[] | lbl("wave:")[0] // empty] | sort_by(capture("^(?<p>[^0-9]*)(?<n>[0-9]*)(?<s>.*)$") | [.p, (.n | tonumber? // 0), .s]) | .[0] // "-")",
       (["building", "verifying", "fixing", "passed"][] as $s
         | [$open[] | select(.s == $s)] | select(length > 0)
-        | "\($s): " + (map(ref + (lbl("round:")[0] // "" | if . == "" then "" else " (round \(.))" end)) | join(", "))),
+        | "\($s): " + (map(ref) | join(", "))),
       ([$open[] | select(.s == "planned")] as $p
         | ([$p[] | select(all(.blockedBy.nodes[]; .state == "CLOSED"))] | select(length > 0)
             | "ready: " + (map(ref) | join(", "))),

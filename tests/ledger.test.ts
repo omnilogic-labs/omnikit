@@ -114,7 +114,7 @@ test("import opens one run even when another import opened it first", () => {
 
 test("init then import opens one run while the label list lags", () => {
   // GitHub's label-filtered issue list missed a run opened seconds earlier, so
-  // import opened a second run (adaptig/platform #3 and #4).
+  // import opened a second run.
   const lag = { STUB_LAG: "1" };
   expect(ledger(["init", "Ship it"], "", lag).code).toBe(0);
   const plan = join(root, "plan.md");
@@ -306,4 +306,16 @@ test("note --from posts the reply the worker saved, once", () => {
   const again = ledger(["note", "5", "--from", wt]);
   expect(again.code).not.toBe(0);
   expect(again.err).toContain("no saved reply");
+});
+
+test("status shows each task's tier and round; brief keeps no stray markers", () => {
+  status([
+    task(2, "a: x", ["state:fixing", "tier:deep", "round:2"]),
+    task(3, "b: x", ["state:planned", "tier:fast"]),
+  ]);
+  const out = ledger(["status"]).out;
+  expect(out).toContain("fixing: a #2 (deep, round 2)\n");
+  expect(out).toContain("ready: b #3 (fast)\n");
+  one({ ...issue(2, "2026-11-02T10:00:00Z", []), body: "**Goal:** ship\n\n- **Wave:** G1" });
+  expect(ledger(["show", "2", "--brief", "--last", "0"]).out).toContain("\nGoal: ship\nWave: G1");
 });

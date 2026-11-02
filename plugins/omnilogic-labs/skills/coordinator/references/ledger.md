@@ -78,17 +78,18 @@ Run #12: Add a --json flag to every command
 Now:
   Wave 2 building; json-core landed in 4f1c2aa.
 Wave now: 2
-building: json-cmds #15
-fixing: json-docs #16 (round 2)
-ready: json-tests #17
-waiting: json-release #18
-blocked: json-auth #19: Needs staging credentials (owner item posted)
+building: json-cmds #15 (deep)
+fixing: json-docs #16 (fast, round 2)
+ready: json-tests #17 (fast)
+waiting: json-release #18 (fast)
+blocked: json-auth #19 (fast): Needs staging credentials (owner item posted)
 merged: 3, dropped: 1, open: 5
-CLOSE json-core #14: look CLOSE: table spacing tighter than the reference
+CLOSE json-core #14 (fast): look CLOSE: table spacing tighter than the reference
 Rulings: 2 (in the run body)
 ```
 
-`ready` tasks have every "blocked by" task closed; `waiting` ones do not. Read this, not the issues.
+Each task shows its builder tier and fix round. `ready` tasks have every "blocked by" task closed; `waiting` ones
+do not. Read this, not the issues.
 
 ## Reading cheaply
 

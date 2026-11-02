@@ -60,10 +60,10 @@ models. Read hosts.md once at the start.
 
 1. Read `.agents/coordinator.md` if it exists. It holds the base branch, max lanes, check command, push policy,
    and provision and teardown commands. `references/config.md` documents each setting and its default.
-2. Run `scripts/ledger status` and resume from its output alone (`references/ledger.md` explains it). With no
-   run, the plan's import starts one.
-3. Check what is already running: live workers from this session, and `scripts/wt list`. Never give a task two
-   workers. After a restart none survive, so a `building` or `verifying` task is redispatched in its worktree.
+2. Run `scripts/ledger status` and resume from it: it gives each open task's state and tier, enough to dispatch.
+   Read a task (`ledger show <task> --brief`) only for what status lacks. With no run, import starts one.
+3. Check what is already running (live workers, `scripts/wt list`); never give a task two workers. None survive a
+   restart: redispatch `building` and `verifying` tasks in their worktrees, then start `ready` ones up to max lanes.
 
 ## The loop
 
