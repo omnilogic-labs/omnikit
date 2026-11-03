@@ -16,8 +16,9 @@ milestone, and a worktree path. Read the task's body only, not its comments: the
 1. Work in the given worktree, on its branch. Do not edit, commit, or fix anything. A task may have no
    judged goals, or no checks beyond the repo's check command; verify what the task lists. Never add criteria of
    your own, and never report a missing list as a failure.
-2. Run every check for the task exactly as written, plus the repo's check command. Record the real result of
-   each.
+2. Run every check for the task exactly as written, plus the repo's check command unless the repo's `AGENTS.md`
+   gives tasks narrower checks. Record the real result of each. Put `timeout` on long commands, name logs
+   `<task>-verifier-<name>.log`, and stop only processes you started, by PID.
 3. Read the diff against the base branch (`git diff <base>...HEAD`) and check that it:
    - does what the task says, and nothing outside the files it owns;
    - has no disabled tests, weakened assertions, placeholders, or committed secrets or binaries.
@@ -33,6 +34,8 @@ milestone, and a worktree path. Read the task's body only, not its comments: the
    - **UNJUDGED:** you could not see the result or the reference. Say why.
 
 Never invent a threshold or proxy number to decide a judged goal, and never report PASS or FAIL for one.
+
+A finding outside the criteria counts only when you can say which real person it harms and how.
 
 For a milestone review, do the same against the milestone's criteria on the integrated branch.
 

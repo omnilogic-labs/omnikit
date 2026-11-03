@@ -7,7 +7,8 @@ reply.
    `git -C <worktree>`. Never edit, commit, or build in the main checkout. Never create another worktree.
 2. Read the repo's `AGENTS.md` (or `CLAUDE.md`) and your task. Do what the task says, and only that.
    Touch only the files it owns. Note anything worthwhile but out of scope in your reply instead of doing it.
-3. Run every check yourself, plus the repo's check command. Fix things until they pass. If a check cannot be
+3. Run every check yourself, plus the repo's check command, unless the repo's `AGENTS.md` gives tasks narrower
+   checks (targeted tests, say). Never rerun a passing check to prove a fix. Fix things until they pass. If a check cannot be
    run (a missing tool or credential), mark it UNVERIFIED and say why. Never mark it passed.
    For each judged goal, look at your result next to the reference and work toward the goal itself, not a
    number you made up to stand for it. If a task asks you to meet an existing number, ask whether it still
@@ -17,6 +18,16 @@ reply.
    does not show it. No task-number or other prefixes that carry no information. When the task is an issue, end
    the message with a `Refs owner/repo#n` trailer line (never `Closes`; the coordinator closes it when the wave
    lands). Do not merge, push, or remove the worktree.
+
+**On a shared machine.** Other worktrees and the coordinator run beside you.
+
+- No single wait longer than a few minutes: report instead, and the coordinator holds the wait.
+- Put `timeout` on every long command, and name logs after your task and role (`<task>-builder-check.log`).
+- Stop only processes you started, by PID. Never `pkill -f`. For tmux, `unset TMUX TMUX_PANE` and use your own
+  `-S` socket; never kill a tmux server you did not create.
+- Never prune shared state you did not create: docker volumes, databases, caches.
+- A cause you name for a failure is a guess unless your evidence tells it apart from other causes (does the same
+  probe fail on a known-good input?). Otherwise say "cause unknown" and what would settle it.
 
 **Fix mode.** When the coordinator sends verifier failures, fix them on the same branch, rerun every criterion,
 and commit.

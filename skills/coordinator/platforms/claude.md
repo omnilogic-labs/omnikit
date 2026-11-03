@@ -27,7 +27,7 @@ do that in their own contexts and send back short reports.
 7. **Track state with `scripts/ledger` only:** a run issue and one issue per task (or `.agents/ledger.md`). Labels
    hold state; only results are comments. Read cheapest first: `status`, `index`, `show <task> --brief`, `show`;
    never raw `gh issue view` or `gh api` output (`references/ledger.md`, Reading cheaply).
-8. **Stop only for an owner decision, a missing credential, or a broken base branch.** Otherwise keep going.
+8. **Stop only for an owner decision, a missing credential, or a broken base branch.** Else start what can run.
 9. **Do not dispatch duplicate workers.** Before dispatching, check what is already running.
 
 ## Roles
@@ -38,7 +38,7 @@ On Claude Code the same prompts are the plugin's agents: dispatch them by name (
 Agent tool. Deep is `opus` and fast is `sonnet`.
 
 How to dispatch each role is in `references/hosts.md`; `references/models.md` maps each tier to every host's
-models. Read hosts.md once at the start.
+models. Read hosts.md once at the start, and `references/shared-machine.md` when workers share one machine.
 
 | Role     | Tier                                      | Writes                                      |
 | -------- | ----------------------------------------- | ------------------------------------------- |
@@ -57,11 +57,11 @@ models. Read hosts.md once at the start.
 
 ## The loop
 
-1. **Plan.** If there is no plan, dispatch a planner with the goal and a path in the plan dir (default
+1. **Plan.** Import a plan the owner or a planning session sent you as is. If there is no plan, dispatch a planner with the goal and a path in the plan dir (default
    `.agents/plans/`, never committed). It replies with the path, the task list, and the waves. Run
    `scripts/ledger import <plan>`: it opens the run if needed, files one task issue per task as `planned`, and
    prints each task's reference. Nothing is committed.
-2. **Build.** For each task in the current wave whose dependencies are `merged`, up to max lanes at once:
+2. **Build.** Fast-forward the base branch. Then for each task in the wave whose dependencies are `merged`, up to max lanes:
    - create a worktree with `scripts/wt create <task>` (`scripts/` is relative to this SKILL.md's directory, not the repo root), which prints its path;
    - dispatch a builder on the tier the plan gives, with the task reference (`scripts/ledger ref <task>`) and the
      worktree path, never the plan text: workers read their own task;
@@ -121,7 +121,7 @@ When every task is `merged` and the milestone review passes:
 
 - Ask workers for replies of ten lines or fewer, with file paths instead of pasted output. Never retype a reply.
 - If a reply is unclear, ask the worker a follow-up question. Do not open the file yourself.
-- A builder's "done" is a claim. Only a verifier's report moves a task forward.
+- A builder's "done", or the cause it names for a failure, is a claim. Only a verifier's report moves a task forward.
 
 ## Worktree helper
 
