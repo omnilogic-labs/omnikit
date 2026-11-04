@@ -7,7 +7,7 @@ Cross-platform agent skills by Omnilogic Labs, for Claude Code, Codex, and Antig
 - `src/skills/` and `src/agents/` are the source. Edit there, never the generated output: `plugins/omnilogic-labs/{skills,agents}`, root `skills/`, and `dist/`
 - `scripts/build/` is the compiler; `hosts.ts` is the one table of per-host models and tools, `os.ts` the OS table, `kits.ts` the kit table
 - `bun run build` regenerates every tree; run it after any `src/` or `scripts/build/` change. Committed trees are always any-OS; `dist/` follows `OMNIKIT_OS`, else the OS in `dist/*/.os`, else the detected OS, and `--os` overrides. `bun run build:check` and `bun run verify` fail on stale output
-- `plugins/omnilogic-labs/` is the whole plugin: generated `skills/` and `agents/`, plus `bin/`, `evals/`
+- `plugins/omnilogic-labs/` is the whole plugin: generated `skills/` and `agents/`, plus `bin/` (including `bin/omsg`), `omsg/`, `evals/`
 - `plugins/omnilogic-labs-essentials/` is the essentials kit for people who are not developers: `plain-writing`, `artistic-vision`, `agent-browser` and `browser-buddy`, no hooks. Its `skills/`, `agents/` and `bin/` are generated; `<!-- @if kit:essentials -->` and `<!-- @if kit:full -->` tell the trees apart. `install.sh --kit essentials` installs it instead of the whole plugin; one kit at a time
 - `skills/` is the committed portable copy for `npx skills` (a dispatcher plus `platforms/<host>.md`); `dist/` is gitignored, built per machine
 - `.claude-plugin/marketplace.json` is the marketplace manifest; it lists both plugins
@@ -18,6 +18,7 @@ Cross-platform agent skills by Omnilogic Labs, for Claude Code, Codex, and Antig
 - agent-browser: drive the agent-browser CLI
 - artistic-vision: Gemini image generation and editing, Sharp processing
 - coordinator: run multi-step work through planner, builder, and verifier agents
+- omsg: message the owner and other agent sessions with the omsg command
 - onepassword: read secrets through the op CLI
 - plain-writing: write prose a reader understands on the first pass
 - primer: turn a product idea into a build brief and task files

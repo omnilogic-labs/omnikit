@@ -37,7 +37,7 @@ Then show the page to the owner:
   passed as is. Without `files` the images are missing from the published page. Pass `icon: "checklist"` and a one-sentence `description`. The out dir must be under the working
   directory or the scratchpad. The page already meets the artifact page contract, so do not edit it.
 - Give the owner the link. To revise the questions, edit the spec, rebuild into the same out dir, and publish the
-  same path again.
+  same path again. Publishing a questionnaire sends the owner a one-line omsg message with the form link (the Claude mod does it; agents do nothing).
 
 Say what you need back: "Answer what you can, then press Copy answers and paste the block here."
 

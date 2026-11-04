@@ -9,6 +9,7 @@ One plugin carrying every Omnilogic Labs skill and agent.
 - `agent-browser`: drive Vercel Labs' agent-browser CLI (snapshot-ref workflow, sessions, gotchas).
 - `artistic-vision`: Gemini-powered image intelligence plus Sharp-powered local image processing.
 - `coordinator`: run multi-step work through planner, builder, and verifier agents.
+- `omsg`: message the owner and other agent sessions with the `omsg` command.
 - `onepassword`: reliable secret retrieval from 1Password through the `op` CLI.
 - `plain-writing`: how to write prose a reader understands on the first pass.
 - `primer`: turn a vague product idea into a build brief, task files, and a build run.
