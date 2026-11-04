@@ -1,0 +1,21 @@
+#!/bin/bash
+# omsg: mail between agent sessions and their owner. Lives at the plugin root
+# so Claude Code puts it on PATH while the plugin is enabled; Codex and agy
+# reach it through a symlink, so resolve this file's real path first.
+set -e
+SELF="$(realpath "$0")"
+PLUGIN="$(dirname "$(dirname "$SELF")")"
+
+if [ "$1" = hook ]; then
+  # >>> omsg-hooks fast path >>>
+  # Filled in by the omsg-hooks task: answer the common no-mail case from bash
+  # (live/<hostpid> and notify/seen mtimes) and exit before starting bun.
+  # <<< omsg-hooks fast path <<<
+  :
+fi
+
+if ! command -v bun > /dev/null 2>&1; then
+  echo "omsg: bun is not on PATH (https://bun.sh)" >&2
+  exit 1
+fi
+exec bun "$PLUGIN/omsg/cli.ts" "$@"
