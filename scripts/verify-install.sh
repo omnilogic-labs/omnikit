@@ -8,7 +8,8 @@
 # Deterministic checks: the build is fresh (bun run build:check),
 # install.sh --check, the Claude Code marketplace and plugin list, the skills,
 # agents, plugin, and external_worker tool in Claude Code's system/init event,
-# and the skill and agent links Codex and agy read (into dist/codex, dist/agy).
+# the skill and agent links Codex and agy read (into dist/codex, dist/agy), and
+# for the full kit omsg on PATH plus the omsg hooks in Codex's and agy's hooks files.
 #
 # --kit <name> checks an install made with install.sh --kit <name>: the
 # omnilogic-labs-<name> plugin, and only that kit's skills and agents.
@@ -31,6 +32,8 @@ CODEX_SKILLS_DIR="${CODEX_HOME:-$HOME/.codex}/skills"
 CODEX_AGENTS_DIR="${CODEX_HOME:-$HOME/.codex}/agents"
 AGY_SKILLS_DIR="$HOME/.gemini/config/skills"
 AGY_AGENTS_DIR="$HOME/.gemini/config/agents"
+CODEX_HOOKS="${CODEX_HOME:-$HOME/.codex}/hooks.json"
+AGY_HOOKS="$HOME/.gemini/config/hooks.json"
 SRC="$REPO_ROOT/src"
 DIST="$REPO_ROOT/dist"
 ASK_TIMEOUT=300
@@ -332,6 +335,59 @@ check_codex_agy() {
   fi
 }
 
+# check_hook_file <check> <file> <jq-filter>: the hooks file holds one omsg
+# entry per expected event (the filter prints the omsg commands, one per line).
+check_hook_file() {
+  local check="$1" file="$2" filter="$3" n=$(($# - 3)) got want
+  if [ ! -f "$file" ]; then
+    result fail "$check" "$file missing (run: bash install.sh)"
+    return 0
+  fi
+  got="$(jq -r "$filter" "$file" 2> /dev/null | sort | tr '\n' ' ')"
+  want="$(printf '%s\n' "${@:4}" | sort | tr '\n' ' ')"
+  if [ "$got" = "$want" ]; then
+    result pass "$check" "$n omsg entries in $file"
+  else
+    result fail "$check" "omsg entries in $file are: ${got:-none}"
+  fi
+}
+
+# omsg is part of the full kit only: on PATH as this repo's shim, and hooked
+# into Codex and agy when those are installed.
+check_omsg() {
+  local found want
+  say ""
+  say "omsg"
+  if [ -n "$KIT" ]; then
+    result skip omsg-path "kits do not carry omsg"
+    return 0
+  fi
+  want="$PLUGIN_DIR/bin/omsg"
+  found="$(command -v omsg 2> /dev/null || true)"
+  if [ -z "$found" ]; then
+    result fail omsg-path "omsg not on PATH (is ~/.local/bin on PATH? run: bash install.sh)"
+  elif [ "$(readlink -f "$found")" = "$(readlink -f "$want")" ] || [ "$(readlink -f "$found")" = "$(readlink -f "$MAIN_ROOT/plugins/omnilogic-labs/bin/omsg")" ]; then
+    result pass omsg-path "$found"
+  else
+    result fail omsg-path "$found is not this repo's shim ($want)"
+  fi
+
+  if has codex || [ -d "$CODEX_AGENTS_DIR" ]; then
+    check_hook_file codex-omsg-hooks "$CODEX_HOOKS" \
+      '[.hooks // {} | to_entries[] | .value[] | .hooks[] | .command | select(test("omsg hook "))] | .[]' \
+      "omsg hook start --host codex" "omsg hook post-tool --host codex" "omsg hook stop --host codex" "omsg hook end --host codex"
+  else
+    result skip codex-omsg-hooks "codex not on PATH"
+  fi
+  if has agy || [ -d "$AGY_SKILLS_DIR" ]; then
+    check_hook_file agy-omsg-hooks "$AGY_HOOKS" \
+      '[to_entries[] | .value | objects | to_entries[] | .value | arrays | .[] | .command | select(test("omsg hook "))] | .[]' \
+      "omsg hook start --host agy" "omsg hook pre-invocation --host agy" "omsg hook stop --host agy"
+  else
+    result skip agy-omsg-hooks "agy not on PATH"
+  fi
+}
+
 QUESTION="List every skill you have discovered (and every subagent type, if you have any) whose name contains $NS or matches one of these: ${SKILLS[*]}. One per line, exactly as you see it. Then say whether any of them appears twice, with and without a prefix. Do not use tools."
 
 # ask <check> <binary> <cmd...>: runs one model query from the repo root and
@@ -379,6 +435,7 @@ check_build
 check_install
 check_claude
 check_codex_agy
+check_omsg
 $ASK && check_ask
 
 printf 'summary\tpass=%d\tfail=%d\tskip=%d\n' "$n_pass" "$n_fail" "$n_skip"

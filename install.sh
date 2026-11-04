@@ -11,6 +11,11 @@
 #                 ~/.gemini/config/skills and ~/.gemini/config/agents. It does
 #                 not read ~/.agents/skills.
 #
+# The full kit also links plugins/omnilogic-labs/bin/omsg into ~/.local/bin and
+# merges the omsg hooks into Codex's hooks.json and agy's hooks.json (only the
+# omsg entries; any other hook stays). Codex asks you to trust new hooks once
+# in its /hooks screen; this script never bypasses that.
+#
 # --kit <name> installs one smaller kit instead (plugins/omnilogic-labs-<name>):
 # its plugin for Claude Code, and only its skills and agents for Codex and agy.
 # One kit at a time: installing a kit removes the whole plugin, and the default
@@ -30,6 +35,10 @@ CODEX_AGENTS_DIR="${CODEX_HOME:-$HOME/.codex}/agents"
 AGENTS_SKILLS_DIR="$HOME/.agents/skills"
 AGY_SKILLS_DIR="$HOME/.gemini/config/skills"
 AGY_AGENTS_DIR="$HOME/.gemini/config/agents"
+CODEX_HOOKS="${CODEX_HOME:-$HOME/.codex}/hooks.json"
+AGY_HOOKS="$HOME/.gemini/config/hooks.json"
+BIN_DIR="$HOME/.local/bin"
+OMSG_SRC="$REPO_ROOT/plugins/omnilogic-labs/bin/omsg"
 SKILLS_SRC="$REPO_ROOT/plugins/omnilogic-labs/skills"
 DIST="$REPO_ROOT/dist"
 MARKETPLACE="omnikit"
@@ -476,6 +485,13 @@ install_agents() {
   # Codex reads ~/.agents/skills too; older installs linked here as well, and
   # a skill in both shows up twice.
   prune_dir legacy "$CODEX_SKILLS_DIR"
+
+  # Hooks are stable and on by default in Codex 0.166, so no config.toml flag
+  # is needed. Codex still asks for trust before it runs a new hook.
+  sync_hooks codex "$CODEX_HOOKS"
+  if [ -z "$KIT" ] && ! $CHECK && ! $DRY_RUN; then
+    say "  trust    open Codex and approve the omsg hooks once in /hooks"
+  fi
 }
 
 # agy scans ~/.gemini/config/skills one level deep and follows symlinks.
@@ -484,6 +500,138 @@ install_agy() {
   say "Antigravity CLI ($AGY_SKILLS_DIR, $AGY_AGENTS_DIR)"
   link_all "$AGY_SKILLS_DIR" "$DIST/agy/skills" '*' skills
   link_all "$AGY_AGENTS_DIR" "$DIST/agy/agents" '*.md' agents
+  sync_hooks agy "$AGY_HOOKS"
+}
+
+# omsg_hooks <find|check|apply|remove> <codex|agy> <file>: merges the omsg
+# hook entries into a host's hooks file with bun, keeping every other hook.
+# Earlier omsg entries are replaced, so a re-run leaves exactly one per event.
+# Prints ok|missing|stale (check), present|absent (find), or wrote|current.
+OMSG_HOOKS_JS='
+const fs = require("fs");
+const [mode, host, file] = process.argv.slice(1);
+const isOmsg = (c) => /(^|[\s/\\])omsg(\.exe)?\s+hook\s/.test(c || "");
+const codexEvents = { SessionStart: "start", PostToolUse: "post-tool", Stop: "stop", SessionEnd: "end" };
+const agyEvents = { SessionStart: "start", PreInvocation: "pre-invocation", Stop: "stop" };
+let cur = {};
+if (fs.existsSync(file)) {
+  try { cur = JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) { console.error("cannot parse " + file); process.exit(2); }
+}
+const cmd = (ev) => "omsg hook " + ev + " --host " + host;
+function strip(root) {
+  const out = JSON.parse(JSON.stringify(root));
+  if (host === "codex") {
+    for (const [ev, groups] of Object.entries(out.hooks || {})) {
+      const kept = groups.map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !isOmsg(h.command)) })).filter((g) => g.hooks.length);
+      if (kept.length) out.hooks[ev] = kept; else delete out.hooks[ev];
+    }
+    if (out.hooks && !Object.keys(out.hooks).length) delete out.hooks;
+  } else {
+    delete out.omsg;
+  }
+  return out;
+}
+function add(root) {
+  const out = JSON.parse(JSON.stringify(root));
+  if (host === "codex") {
+    out.hooks = out.hooks || {};
+    for (const [ev, name] of Object.entries(codexEvents)) {
+      (out.hooks[ev] = out.hooks[ev] || []).push({ hooks: [{ type: "command", command: cmd(name), timeout: 10 }] });
+    }
+  } else {
+    out.omsg = {};
+    for (const [ev, name] of Object.entries(agyEvents)) out.omsg[ev] = [{ type: "command", command: cmd(name), timeout: 10 }];
+  }
+  return out;
+}
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const stripped = strip(cur);
+const has = !same(stripped, cur);
+const write = (o) => {
+  if (!Object.keys(o).length) { fs.rmSync(file, { force: true }); return; }
+  fs.mkdirSync(require("path").dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(o, null, 2) + "\n");
+};
+if (mode === "find") console.log(has ? "present" : "absent");
+else if (mode === "check") console.log(same(add(stripped), cur) ? "ok" : has ? "stale" : "missing");
+else if (mode === "apply") { const n = add(stripped); if (same(n, cur)) console.log("current"); else { write(n); console.log("wrote"); } }
+else if (mode === "remove") { if (has) { write(stripped); console.log("wrote"); } else console.log("current"); }
+'
+
+omsg_hooks() {
+  bun -e "$OMSG_HOOKS_JS" "$@"
+}
+
+# sync_hooks <codex|agy> <file>: installs the omsg entries in the full kit,
+# removes them in a kit; --check reports instead of writing.
+sync_hooks() {
+  local host="$1" file="$2" state
+  if ! has bun; then
+    $CHECK && problem no-bun "bun not on PATH; cannot check $host hooks"
+    return 0
+  fi
+  if [ -n "$KIT" ]; then
+    state="$(omsg_hooks find "$host" "$file")" || {
+      say "  warn     cannot read $file"
+      return 0
+    }
+    [ "$state" = present ] || return 0
+    if $CHECK; then
+      problem legacy "$file (omsg hooks, not part of kit $KIT)"
+      return 0
+    fi
+    $DRY_RUN || omsg_hooks remove "$host" "$file" > /dev/null
+    say "  remove   omsg hooks from $file"
+    return 0
+  fi
+  if $CHECK; then
+    state="$(omsg_hooks check "$host" "$file")" || {
+      problem unreadable "$file"
+      return 0
+    }
+    if [ "$state" = ok ]; then n_ok=$((n_ok + 1)); else problem "$state" "$file (omsg hooks)"; fi
+    return 0
+  fi
+  if $DRY_RUN; then
+    say "  hooks    would merge omsg entries into $file"
+    return 0
+  fi
+  state="$(omsg_hooks apply "$host" "$file")" || {
+    say "  warn     cannot merge omsg hooks into $file (unparseable?)"
+    return 0
+  }
+  if [ "$state" = wrote ]; then
+    say "  hooks    omsg entries merged into $file"
+    n_link=$((n_link + 1))
+  else
+    n_ok=$((n_ok + 1))
+  fi
+}
+
+# install_omsg: puts the omsg shim on PATH (the full kit only; a kit removes
+# a link of ours). The shim resolves its own real path, so a symlink is enough.
+install_omsg() {
+  local dst="$BIN_DIR/omsg"
+  if [ -n "$KIT" ]; then
+    if [ -L "$dst" ] && into_repo "$dst"; then
+      if $CHECK; then
+        problem legacy "$dst"
+        return 0
+      fi
+      $DRY_RUN || rm -f "$dst"
+      say "  prune    $dst (not part of kit $KIT)"
+      n_prune=$((n_prune + 1))
+    fi
+    return 0
+  fi
+  say ""
+  say "omsg ($dst)"
+  $DRY_RUN || mkdir -p "$BIN_DIR"
+  link_into "$BIN_DIR" "$OMSG_SRC" omsg
+  case ":$PATH:" in
+    *":$BIN_DIR:"*) ;;
+    *) $CHECK || say "  warn     $BIN_DIR is not on PATH; add it so hooks and agents find omsg" ;;
+  esac
 }
 
 # Codex walks each skill directory several levels deep, so a node_modules
@@ -568,6 +716,7 @@ skipped() {
 if $DO_CLAUDE; then install_claude; else skipped "Claude Code" claude; fi
 if $DO_AGENTS; then install_agents; else skipped "Codex" codex; fi
 if $DO_AGY; then install_agy; else skipped "Antigravity CLI" agy; fi
+if $DO_CLAUDE || $DO_AGENTS || $DO_AGY; then install_omsg; fi
 remove_gemini_cli_legacy
 
 if $CHECK; then
