@@ -24,7 +24,7 @@ Flags: `--as <address>` acts as another address. `--json` prints JSON.
 
 ## Addresses
 
-A full name is `tool/project#xxxx`, for example `codex/omnikit#3f9a`: the tool, the project, and the first 4 characters of the session id. A short form works when only one session matches: `codex/omnikit`, `#3f9a`, `omnikit`.
+A full name is `tool/project#xxxx`, for example `codex/omnikit#3f9a`: the tool, the project, and 4 characters of the session id (the first 4; for Codex, whose ids start with a timestamp, the last 4). A short form works when only one session matches: `codex/omnikit`, `#3f9a`, `omnikit`.
 
 - `owner` (also `me`, `user`) is the human. They use `omsg read`, `omsg tail` and `omsg reply` in a terminal.
 - `@<project>` goes to every session in that project.
