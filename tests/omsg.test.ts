@@ -323,3 +323,19 @@ test("send - reads the body from stdin; wait returns 0 on mail and 3 on timeout"
   expect(shim(["--as", "owner", "wait", "--timeout", "1"]).code).toBe(0);
   expect(shim(["--as", "owner", "read"]).out).toContain(": from stdin\n");
 });
+
+test("codex UUIDv7 thread ids started together get distinct names", () => {
+  // Real ids from three codex exec runs started in the same second.
+  const ids = [
+    "01a1a400-9995-7863-8918-f19356aeb320",
+    "01a1a400-99a2-7863-94ba-0770797cb4aa",
+    "01a1a400-99a1-75b0-be36-4fc476be71fc",
+  ];
+  const names = ids.map((s) => fullName("codex", HOST, "proj", s));
+  expect(new Set(names).size).toBe(3);
+  expect(names[0]).toBe(`codex@${HOST}/proj#b320`);
+  // A UUIDv4 (claude, agy) keeps its first 4.
+  expect(fullName("agy", HOST, "proj", "8db2d2c7-0d21-4851-b484-512776f164fe")).toBe(
+    `agy@${HOST}/proj#8db2`
+  );
+});

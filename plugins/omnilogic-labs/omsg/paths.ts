@@ -59,8 +59,20 @@ export function localHost(): string {
   return hostname();
 }
 
+/**
+ * The 4 characters of a session id that go in its name: the first 4, except
+ * for a UUIDv7 (Codex thread ids), whose leading characters are a millisecond
+ * timestamp shared by every session started in the same ~49 days, so its
+ * random last 4 are used instead.
+ */
+export function shortSid(sid: string): string {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sid)
+    ? sid.slice(-4)
+    : sid.slice(0, 4);
+}
+
 export function fullName(tool: string, host: string, project: string, sid: string): string {
-  return `${tool}@${host}/${project}#${sid.slice(0, 4)}`;
+  return `${tool}@${host}/${project}#${shortSid(sid)}`;
 }
 
 export type NameParts = { tool: Tool; host: string; project: string; sid4: string };
