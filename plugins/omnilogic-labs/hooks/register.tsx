@@ -1,7 +1,22 @@
 import { atom, read, update } from "claude-code";
 import type { EngineInterface, Register } from "claude-code";
 
-import type { WorkerEngine, WorkerJob } from "../types";
+import type { MailBand, WorkerEngine, WorkerJob } from "../types";
+import {
+  ARTIFACT_URL,
+  MAIL_MAX,
+  MAIL_POLL_MS,
+  MAIL_RULE,
+  deliveredText,
+  isSingleOmsg,
+  mailArgs,
+  parseCount,
+  parseHookStart,
+  parseRecords,
+  questionnaireTitle,
+  type MailPaths,
+} from "./mail";
+
 // The tool is listed as mcp__<plugin>__<name>; the tool.call matcher below
 // spells the full name as a literal so the engine's scan can read it.
 const TOOL_NAME = "external_worker";
@@ -190,6 +205,136 @@ function poll($: EngineInterface, id: string): void {
   timers.set(id, timer);
 }
 
+// ---------- omsg mail (pure helpers in mail.ts) ----------
+
+const mailBand = atom(
+  { plugin: "omnilogic-labs", key: "mail" } as const,
+  {
+    owner: 0,
+  } as MailBand
+);
+
+// What session.start learned, kept per session in the plugin's store (shared
+// by every session on the machine) so a reload finds it again.
+type MailSession = MailPaths & { ruled: boolean };
+const mailKey = (sessionId: string) => `mail.${sessionId}`;
+
+// Module-local: a reload drops them, and session.start arms the timer again.
+let mailTimer: { cancel: () => void } | null = null;
+let lastNotify: number | null = null;
+let lastOwnerNotify: number | null | undefined;
+
+// Runs the plugin's omsg through bash (an extensionless script opens a dialog
+// on Windows when run bare). Resolves its output, or null when it cannot run.
+async function omsg(
+  $: EngineInterface,
+  args: readonly string[]
+): Promise<{ exitCode: number; stdout: string; stderr: string } | null> {
+  try {
+    return await $.process.run(["bash", `${$.plugin.root}/bin/omsg`, ...args]);
+  } catch {
+    return null;
+  }
+}
+
+async function mtime($: EngineInterface, path: string): Promise<number | null> {
+  if (path === "") return null;
+  try {
+    return (await $.fs.stat(path)).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
+async function mailSession($: EngineInterface): Promise<MailSession | null> {
+  const got = (await $.store.get(mailKey(await $.session.id()))) as MailSession | undefined;
+  return got !== undefined && typeof got.name === "string" ? got : null;
+}
+
+// Hands text to this session: a message wakes it if idle, a note waits for
+// the next turn.
+async function tell($: EngineInterface, text: string): Promise<void> {
+  const sessionId = await $.session.id();
+  const sent = await $.session.send({ to: { sessionId }, text }).catch(() => null);
+  if (sent?.isDelivered !== true) {
+    await $.session.append({ message: { type: "user", content: [{ type: "text", text }] } });
+  }
+}
+
+async function refreshOwner($: EngineInterface): Promise<void> {
+  const ran = await omsg($, ["--as", "owner", "count"]);
+  const owner = ran === null || ran.exitCode !== 0 ? 0 : parseCount(ran.stdout);
+  await update($, mailBand, () => ({ owner }));
+}
+
+// One look: the stats alone unless notify is newer than seen (mail for this
+// session) or the owner's notify moved (the band's count).
+async function checkMail($: EngineInterface): Promise<void> {
+  const me = await mailSession($);
+  if (me === null) return;
+  const notify = await mtime($, me.notify);
+  const seen = await mtime($, me.seen);
+  if (notify !== null && notify > (seen ?? -Infinity) && notify !== lastNotify) {
+    lastNotify = notify;
+    const ran = await omsg($, ["--as", me.name, "read", "--json", "--max", String(MAIL_MAX)]);
+    const records = ran === null || ran.exitCode !== 0 ? [] : parseRecords(ran.stdout);
+    if (records.length > 0) {
+      let more = 0;
+      if (records.length >= MAIL_MAX) {
+        const left = await omsg($, ["--as", me.name, "count"]);
+        more = left === null ? 0 : parseCount(left.stdout);
+      }
+      await tell($, deliveredText(records, more));
+    }
+  }
+  const owner = await mtime($, me.ownerNotify);
+  if (owner !== lastOwnerNotify) {
+    lastOwnerNotify = owner;
+    await refreshOwner($);
+  }
+}
+
+const safeCheck = ($: EngineInterface) => checkMail($).catch(() => undefined);
+
+// Registers this session with omsg, tells it the mail rule once, and starts
+// looking for mail. Quiet when omsg is missing or fails.
+async function mailStart($: EngineInterface): Promise<void> {
+  const sessionId = await $.session.id();
+  const ran = await omsg($, [
+    "hook",
+    "start",
+    "--host",
+    "claude",
+    "--sid",
+    sessionId,
+    "--cwd",
+    await $.session.root(),
+  ]);
+  const paths = ran === null || ran.exitCode !== 0 ? null : parseHookStart(ran.stdout);
+  if (paths === null) return;
+  const before = await mailSession($);
+  const me: MailSession = { ...paths, ruled: before?.ruled === true };
+  if (!me.ruled) {
+    await $.session.append({
+      message: { type: "user", content: [{ type: "text", text: MAIL_RULE }] },
+    });
+    me.ruled = true;
+  }
+  await $.store.set(mailKey(sessionId), me);
+  if (mailTimer === null) mailTimer = $.clock.every(MAIL_POLL_MS, () => void safeCheck($));
+  await safeCheck($);
+}
+
+// The band line for the owner's unread mail, or null at zero.
+async function mailLine($: EngineInterface): Promise<string | null> {
+  const { owner } = await read($, mailBand);
+  return owner > 0 ? `Mail: ${owner} for you (/mail)` : null;
+}
+
+// Each running codex or agy job gets its own omsg name; fake jobs get none.
+const workerMailName = (engine: WorkerEngine, id: string) =>
+  engine === "fake" ? "" : `${engine}-${id}`;
+
 export const register: Register = (on) => {
   on("session.start", async ($, e, next) => {
     const started = await next(e);
@@ -251,6 +396,13 @@ export const register: Register = (on) => {
       argumentHint: "[job id]",
     });
     for (const job of await read($, jobs)) if (job.status === "running") poll($, job.id);
+    await $.command.register({
+      name: "mail",
+      description: "Read the owner's omsg mail, or reply and send as the owner",
+      argumentHint: "[reply <id> <text> | send <to> <text>]",
+    });
+    // omsg starts Bun; the first prompt does not wait on it.
+    void mailStart($).catch(() => undefined);
     return started;
   });
 
@@ -267,11 +419,13 @@ export const register: Register = (on) => {
 
   on("ui.render", { component: "AbovePrompt" }, async ($, e, next) => {
     const running = (await read($, jobs)).filter((j) => j.status === "running");
-    if (e.props.hasSurvey || running.length === 0) return next(e);
+    const mail = await mailLine($);
+    if (e.props.hasSurvey || (running.length === 0 && mail === null)) return next(e);
     const now = await $.clock.now();
     const { Box, Text } = $.ui.resolve(e);
     return (
       <Box flexDirection="column">
+        {mail !== null && <Text dimColor>{mail}</Text>}
         {running.map((j) => (
           <Text key={j.id} dimColor>
             {j.engine} {j.id} {mmss(now - j.startedAt)} {summarize(j.lastLine)}
@@ -328,11 +482,18 @@ export const register: Register = (on) => {
 
   // The external-runner agent follows its job with the Watch command; allow
   // exactly that command for a known job, from a subagent, without a prompt.
+  // A single omsg call that would ask is allowed too.
   on("tool.check", { tool: "Bash" }, async ($, e, next) => {
     const command = (e.input as { command?: unknown } | undefined)?.command;
-    if (e.agentId === undefined || typeof command !== "string") return next(e);
-    const known = (await read($, jobs)).some((j) => watchCommand($.plugin.root, j.dir) === command);
-    return known ? { decision: "allow", reason: "external_worker Watch command" } : next(e);
+    if (typeof command !== "string") return next(e);
+    const known =
+      e.agentId !== undefined &&
+      (await read($, jobs)).some((j) => watchCommand($.plugin.root, j.dir) === command);
+    if (known) return { decision: "allow", reason: "external_worker Watch command" };
+    const decided = await next(e);
+    return decided.decision === "ask" && isSingleOmsg(command)
+      ? { ...decided, decision: "allow", reason: "a single omsg call" }
+      : decided;
   });
 
   on("tool.call", { tool: "mcp__omnilogic-labs__external_worker" }, async ($, e, next) => {
@@ -399,6 +560,8 @@ export const register: Register = (on) => {
     const sessionId = await $.session.id();
     const id = crypto.randomUUID().slice(0, 8);
     let dir = `${ROOT}/${sessionId}/${id}`;
+    const mailName = workerMailName(engine, id);
+    const mailLine = mailName === "" ? "" : `\nMail: ${mailName}`;
 
     // Job dirs hold task text, which may carry secrets: create them 700.
     // bash prints the dir back as the path to use from here on. On Windows,
@@ -439,7 +602,7 @@ export const register: Register = (on) => {
     await $.fs.write(`${dir}/task.txt`, task);
     await $.fs.write(
       `${dir}/params`,
-      [engine, cwd, String(timeoutSec), model, effort, sandbox, resume].join("\n") + "\n"
+      [engine, cwd, String(timeoutSec), model, effort, sandbox, resume, mailName].join("\n") + "\n"
     );
 
     // A missing cwd fails the job here, without spending a background task.
@@ -484,9 +647,50 @@ export const register: Register = (on) => {
         `Output dir: ${dir}.${await staleWarning($)} Now run the Watch command with Bash. It returns ` +
         `about once a minute: after each RUNNING, write one or two sentences on what the worker is doing, ` +
         `then run it again; reply only once it prints DONE or STALE. ` +
-        `Watch: ${watchCommand($.plugin.root, dir)}`,
+        `Watch: ${watchCommand($.plugin.root, dir)}${mailLine}`,
     };
   }).catch(() => ({
     deny: "external_worker failed to start the job (hook error or timeout); see the debug log.",
   }));
+
+  // ---------- omsg mail ----------
+
+  on("command.run", { command: "mail" }, async ($, e) => {
+    const args = mailArgs(e.args);
+    if (typeof args === "string") return { text: args };
+    const ran = await omsg($, args);
+    if (ran === null)
+      return { text: "omsg could not run; is the omnilogic-labs plugin installed?" };
+    await refreshOwner($).catch(() => undefined);
+    const out = ran.stdout.trim();
+    if (ran.exitCode !== 0)
+      return { text: `omsg failed (exit ${ran.exitCode}): ${ran.stderr.trim() || out}` };
+    return { text: out || (args[2] === "read" ? "No mail." : "Sent.") };
+  });
+
+  on("session.end", async ($, e, next) => {
+    mailTimer?.cancel();
+    mailTimer = null;
+    await omsg($, ["hook", "end", "--host", "claude", "--sid", e.sessionId]);
+    await $.store.delete(mailKey(e.sessionId)).catch(() => undefined);
+    return next(e);
+  });
+
+  // A published questionnaire is mailed to the owner with its link.
+  on("tool.call", { tool: "Artifact" }, async ($, e, next) => {
+    const res = await next(e);
+    const input = e as unknown as { action?: string; file_path?: unknown; asset?: boolean };
+    const file = typeof input.file_path === "string" ? input.file_path : "";
+    if (res.deny !== undefined || res.isError || input.asset === true) return res;
+    if ((input.action ?? "publish") !== "publish" || !file.endsWith(".html")) return res;
+    void (async () => {
+      const me = await mailSession($);
+      if (me === null) return;
+      const title = questionnaireTitle(await $.fs.read(file));
+      const url = ARTIFACT_URL.exec(res.text ?? JSON.stringify(res.result ?? ""))?.[0];
+      if (title === null || url === undefined) return;
+      await omsg($, ["--as", me.name, "send", "owner", `Answer: ${title} ${url}`]);
+    })().catch(() => undefined);
+    return res;
+  });
 };

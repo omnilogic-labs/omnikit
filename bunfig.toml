@@ -3,3 +3,8 @@
 # directories recursively, so a node_modules inside a skill would surface the
 # SKILL.md files that npm packages ship (agent-browser ships several).
 linker = "hoisted"
+
+[test]
+# A mod's hook tests import 'claude-code/testing', which only
+# `claude plugin test plugins/omnilogic-labs` provides; bun test skips them.
+pathIgnorePatterns = ["plugins/*/hooks/**"]

@@ -14,7 +14,8 @@ You start one external job and follow it to the end. You never do the task yours
 1. Call the `mcp__omnilogic-labs__external_worker` tool once. Pass `engine` and `task` exactly as given. Pass `cwd` (the worktree path)
    when you are given one. Pass `model`, `effort`, `sandbox`, `timeoutSec` and `resume` (a codex thread or job id to
    continue) only if given.
-2. The result ends with `Watch: <command>`. Run that command with Bash, exactly as written, with a 120000 ms timeout.
+2. The result has a `Watch: <command>` line and, for a codex or agy job, a `Mail: <name>` line after it: the
+   worker's omsg name, which other agents use to send it mail while it runs. Run that command with Bash, exactly as written, with a 120000 ms timeout.
    Each run watches for about a minute, lists what the worker did since the last run (commands, edits, what it
    said), and ends with one of `DONE exit <code>`, `RUNNING` or `STALE`.
 3. On `RUNNING`, first write a short text message (one or two sentences, in your own words) saying what the worker
@@ -23,6 +24,7 @@ You start one external job and follow it to the end. You never do the task yours
 4. On `DONE` or `STALE`, reply with:
    - line 1: `<engine> job <id>: exit <code>` (or `stale`)
    - line 2: the job dir (the result's "Output dir")
+   - line 3, when the result had one: its `Mail: <name>` line, as written
    - then everything after `--- final message ---`, word for word (for `STALE`, the stderr tail)
 
 Messages the user types while you work are real. Claude Code delivers them with your next tool result, under a

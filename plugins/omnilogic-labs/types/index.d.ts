@@ -20,8 +20,14 @@ export type WorkerJob = {
   endedAt: number | null;
 };
 
+// What the band above the prompt shows about omsg mail.
+export type MailBand = {
+  // Unread mail for the owner.
+  owner: number;
+};
+
 declare module "claude-code" {
   interface PluginState {
-    "omnilogic-labs": { jobs: WorkerJob[] };
+    "omnilogic-labs": { jobs: WorkerJob[]; mail: MailBand };
   }
 }

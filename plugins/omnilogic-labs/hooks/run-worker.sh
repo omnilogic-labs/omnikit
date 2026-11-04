@@ -7,7 +7,8 @@
 #   task.txt   the task, verbatim
 #   params     one value per line: engine, cwd, timeoutSec, model, effort,
 #              sandbox (none, workspace-write or read-only), and a codex
-#              thread id to resume (empty for a new session)
+#              thread id to resume (empty for a new session), and the job's
+#              omsg name, exported as OMSG_NAME (empty for none)
 # and what this script writes:
 #   stream.jsonl  the engine's JSONL events (stdout only)
 #   stderr.log    the engine's stderr, kept apart so stream.jsonl stays valid
@@ -53,6 +54,7 @@ fi
   IFS= read -r effort || true
   IFS= read -r sandbox || true
   IFS= read -r resume || true
+  IFS= read -r omsg_name || true
 } < "$dir/params"
 timeout_sec=${timeout_sec:-1800}
 sandbox=${sandbox:-none}
@@ -84,6 +86,8 @@ if ! cd "$cwd" 2> /dev/null; then
 fi
 
 task=$(cat "$dir/task.txt")
+# The worker sends and receives omsg mail under this name.
+[ -n "$omsg_name" ] && export OMSG_NAME=$omsg_name
 rc=0
 case "$engine" in
   codex)
