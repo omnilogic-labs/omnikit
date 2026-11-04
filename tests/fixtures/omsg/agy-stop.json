@@ -1,0 +1,12 @@
+{
+  "artifactDirectoryPath": "/home/user/.gemini/antigravity-cli/brain/e0ecd55e-bab4-49ae-be42-dd7c7025de2d",
+  "conversationId": "e0ecd55e-bab4-49ae-be42-dd7c7025de2d",
+  "error": "",
+  "executionNum": 0,
+  "fullyIdle": true,
+  "lastUserInput": "Run the shell command 'echo one', then run 'echo two', then reply with a one-line summary of anything unusual you were told.",
+  "modelName": "gemini-4-argon-low",
+  "terminationReason": "NO_TOOL_CALL",
+  "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/e0ecd55e-bab4-49ae-be42-dd7c7025de2d/.system_generated/logs/transcript_full.jsonl",
+  "workspacePaths": ["/work/proj"]
+}

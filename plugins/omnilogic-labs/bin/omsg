@@ -8,10 +8,52 @@ PLUGIN="$(dirname "$(dirname "$SELF")")"
 
 if [ "$1" = hook ]; then
   # >>> omsg-hooks fast path >>>
-  # Filled in by the omsg-hooks task: answer the common no-mail case from bash
-  # (live/<hostpid> and notify/seen mtimes) and exit before starting bun.
+  # post-tool and pre-invocation fire after every tool call, so the no-mail
+  # answer comes from bash: find this session's key in live/<hostpid> (codex is
+  # our parent; agy runs hooks via sh -c, so it is the grandparent) and, when
+  # notify/<key> is not newer than seen/<key>, print nothing and exit without
+  # starting bun. Anything unclear falls through to bun, which decides.
+  case "$2" in
+    post-tool | pre-invocation)
+      omsg_host=
+      [ "$3" = --host ] && omsg_host=$4
+      if [ "$2" = post-tool ] && [ "$omsg_host" = agy ]; then
+        # agy's PostToolUse cannot inject and must answer {}.
+        [ -t 0 ] || cat > /dev/null
+        echo '{}'
+        exit 0
+      fi
+      if [ -n "$OMSG_DIR" ]; then
+        omsg_root=$OMSG_DIR
+      elif [ -n "$LOCALAPPDATA" ] && case "$OSTYPE" in msys* | cygwin*) true ;; *) false ;; esac then
+        omsg_root="$LOCALAPPDATA/omnikit/mail"
+      else
+        omsg_root="${XDG_STATE_HOME:-$HOME/.local/state}/omnikit/mail"
+      fi
+      omsg_key=
+      [ -r "$omsg_root/live/$PPID" ] && { read -r omsg_key < "$omsg_root/live/$PPID" || true; }
+      if [ -z "$omsg_key" ]; then
+        # The grandparent: from /proc without a fork, else (macOS) one ps call,
+        # which is still far cheaper than starting bun.
+        omsg_gp=
+        if [ -r "/proc/$PPID/stat" ]; then
+          read -r omsg_stat < "/proc/$PPID/stat" || true
+          omsg_stat=${omsg_stat##*) }
+          omsg_stat=${omsg_stat#* }
+          omsg_gp=${omsg_stat%% *}
+        else
+          omsg_gp=$(ps -o ppid= -p "$PPID" 2> /dev/null | tr -d ' ') || true
+        fi
+        [ -n "$omsg_gp" ] && [ -r "$omsg_root/live/$omsg_gp" ] \
+          && { read -r omsg_key < "$omsg_root/live/$omsg_gp" || true; }
+      fi
+      if [ -n "$omsg_key" ] && ! [ "$omsg_root/notify/$omsg_key" -nt "$omsg_root/seen/$omsg_key" ]; then
+        [ -t 0 ] || cat > /dev/null
+        exit 0
+      fi
+      ;;
+  esac
   # <<< omsg-hooks fast path <<<
-  :
 fi
 
 if ! command -v bun > /dev/null 2>&1; then
