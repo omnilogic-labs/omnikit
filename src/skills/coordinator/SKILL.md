@@ -133,8 +133,8 @@ Stop only when one of these is true:
 - a credential or account is missing;
 - the base branch is broken and a builder could not fix it.
 
-Set the task `blocked`, post the reason with `ledger note`, post an inbox item that links the task, and keep
-running every task that does not depend on it. When nothing runnable is left, report to the owner in five lines
+Set the task `blocked`, post the reason with `ledger note`, tell the owner in chat
+what blocks it with the task link, and keep running every task that does not depend on it. When nothing runnable is left, report to the owner in five lines
 or fewer: what merged, what is blocked and why, and the exact decision or credential you need.
 
 ## Finishing
