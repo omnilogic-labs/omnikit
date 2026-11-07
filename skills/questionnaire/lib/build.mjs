@@ -63,6 +63,8 @@ export function validate(spec) {
   if (!str(spec.title)) errs.push("title: required string");
   if (spec.intro !== undefined && typeof spec.intro !== "string")
     errs.push("intro: must be a string");
+  for (const k of ["before", "after"])
+    if (spec[k] !== undefined && typeof spec[k] !== "string") errs.push(`${k}: must be a string`);
   if (!Array.isArray(spec.questions) || spec.questions.length === 0) {
     errs.push("questions: required, at least one");
     return errs;
@@ -174,7 +176,13 @@ export function render(spec, baseDir, { embed = false } = {}) {
       images: (o.images ?? []).map(image),
     })),
   }));
-  const data = { title: spec.title, intro: spec.intro ?? "", questions };
+  const data = {
+    title: spec.title,
+    intro: spec.intro ?? "",
+    before: spec.before ?? "",
+    after: spec.after ?? "",
+    questions,
+  };
   const page = readFileSync(join(here, "page.html"), "utf8");
   const app = readFileSync(join(here, "app.js"), "utf8");
   const html = page

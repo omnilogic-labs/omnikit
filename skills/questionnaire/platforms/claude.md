@@ -81,7 +81,8 @@ if they block you.
 ```
 
 Required: `title`, and per question `id` (unique), `title`, `options` (each with `label`), and `idk`. Everything
-else is optional. `value` defaults to `label`. An image is a path, or `{ "path", "caption", "alt" }`. `multi: true` makes the options checkboxes. Every question gets an
+else is optional. `before` and `after` are plain text placed above and below the answer block, so the
+copied block can be a ready-to-paste brief for another agent. `value` defaults to `label`. An image is a path, or `{ "path", "caption", "alt" }`. `multi: true` makes the options checkboxes. Every question gets an
 optional note box and an "I don't know" choice. Markdown means paragraphs, `-` and `1.` lists, `**bold**`,
 `*italic*`, `` `code` ``, and `[links](https://...)`; HTML in the spec shows as text.
 

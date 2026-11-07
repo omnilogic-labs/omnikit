@@ -100,7 +100,8 @@
   function answerBlock() {
     var answered = questions.filter((q) => answers[q.id].idk || answers[q.id].choices.length > 0);
     var open = questions.filter((q) => answered.indexOf(q) === -1);
-    var out = ["Answers: " + spec.title];
+    var out = spec.before ? [spec.before, ""] : [];
+    out.push("Answers: " + spec.title);
     out.push(
       "(" +
         answered.length +
@@ -121,6 +122,7 @@
       out.push("  Answer: " + answer);
       if (a.note.trim()) out.push("  Note: " + a.note.trim().replace(/\s*\n\s*/g, " / "));
     });
+    if (spec.after) out.push("", spec.after);
     return out.join("\n");
   }
 
