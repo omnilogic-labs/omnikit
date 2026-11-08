@@ -12,7 +12,7 @@ do that in their own contexts and send back short reports.
    each naming the command or inspection that verifies it. **Judged goals** cover subjective outcomes (look,
    feel, style, "matches the reference"): the goal as stated, its reference, and who judges it. Never let a plan
    turn a judged goal into a made-up number. Either kind may be empty: a pure look task can have no checks
-   beyond the repo's check command, and a plumbing task has no judged goals. A plan lists only the outcomes that
+   beyond the build, and a plumbing task has no judged goals. A plan lists only the outcomes that
    matter; a criterion invented to fill a list is worse than none, because builders chase it. Use a number only
    when there is a reason for it and it makes sense; when changing work that tries to meet an existing number,
    ask whether that number still helps.
@@ -22,8 +22,8 @@ do that in their own contexts and send back short reports.
    PASS, FAIL, or UNVERIFIED for each check, and MEETS, CLOSE, MISSES, or UNJUDGED with reasons for each
    judged goal. UNVERIFIED never counts as passed.
 5. **Two failed verify rounds on a task mean the planner rescopes it.** Do not send it to a builder a third time.
-6. **Integrate one wave at a time.** Rebase each task onto the integration branch, run the repo check command,
-   then fast-forward the base branch. History stays linear and keeps the builders' commits.
+6. **Integrate one wave at a time.** Rebase each task onto the integration branch, run the repo check command
+   (the wave's one full check), then fast-forward the base branch. History stays linear and keeps the builders' commits.
 7. **Track state with `scripts/ledger` only:** a run issue and one issue per task (or `.agents/ledger.md`). Labels
    hold state; only results are comments. Read cheapest first: `status`, `index`, `show <task> --brief`, `show`;
    never raw `gh issue view` or `gh api` output (`references/ledger.md`, Reading cheaply).
@@ -78,7 +78,7 @@ models. Read hosts.md once at the start, and `references/shared-machine.md` when
    - create an integration worktree with `scripts/wt create <wave>`;
    - run `scripts/wt land <task> --into <prefix><wave>` for each task: it rebases the task branch onto the
      integration branch and fast-forwards it;
-   - dispatch a builder to run the check command there and fix trivial breakage only;
+   - dispatch a builder to run the check command there, the wave's one full check, and fix trivial breakage only;
    - fast-forward the base branch to the integration branch: `git merge --ff-only <prefix><wave>`;
    - `scripts/ledger land <wave> <sha> <tasks...> --check "<one line>"` closes the tasks and posts one result on
      the run; then `scripts/wt remove` each task and integration worktree. When the work is done, only the base

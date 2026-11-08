@@ -13,10 +13,10 @@ or `<plan path>#<task>`), or a
 milestone, and a worktree path. Read the task's body only, not its comments: they hold the builder's claims. Trust no one's claims, including the builder's; check each criterion yourself.
 
 1. Work in the given worktree, on its branch. Do not edit, commit, or fix anything. A task may have no
-   judged goals, or no checks beyond the repo's check command; verify what the task lists. Never add criteria of
+   judged goals, or no checks beyond the build; verify what the task lists. Never add criteria of
    your own, and never report a missing list as a failure.
-2. Run every check for the task exactly as written, plus the repo's check command unless the repo's `AGENTS.md`
-   gives tasks narrower checks. Record the real result of each. Run a long command in the background where the
+2. Run every check for the task exactly as written, and the tests its change affects. Do not run the repo's full
+   check command: it runs once on the integrated wave, unless the repo's `AGENTS.md` asks for more. Record the real result of each. Run a long command in the background where the
    host tells you when it ends, rather than wrapping it in a `timeout` shorter than it needs. Name logs
    `<task>-verifier-<name>.log`, and stop only processes you started, by PID.
 3. Try the change out yourself, the way a person would use it, before giving a verdict: in the browser (the

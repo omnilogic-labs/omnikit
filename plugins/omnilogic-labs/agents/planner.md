@@ -28,10 +28,10 @@ Read the repo's `AGENTS.md` (or `CLAUDE.md`) and the code you need first. Plan f
    - **Wave:** the wave it runs in.
    - **Depends on:** other task names, comma separated, or none.
    - **Acceptance criteria**, in two numbered lists. Either list may be empty: a pure look task can have no
-     checks beyond the repo's check command, and a plumbing task has no judged goals.
-     - **Checks**, for objective outcomes: it builds, tests pass, the feature behaves, a real measured
-       performance figure. Each names the exact command to run or thing to inspect, with the expected result.
-       The repo's check command is always one of them.
+     checks beyond the build and trying it out, and a plumbing task has no judged goals.
+     - **Checks**, for objective outcomes: it builds, its own targeted tests pass, the feature behaves when
+       tried, a real measured performance figure. Each names the exact command to run or thing to inspect, with
+       the expected result. Never list the repo's full check command: it runs once on the integrated wave.
      - **Judged**, for subjective outcomes: look, feel, style, "matches the reference". State the goal itself,
        name the reference (a file, image or link), and say who judges: an independent look by the verifier or
        another model against the reference, and the owner at milestones. Omit the list when there are none.
@@ -49,7 +49,7 @@ number only when there is a reason for it and it makes sense, such as a real bud
 a task changes work that tries to meet an existing number, ask whether that number still helps, and say so in the
 plan if it does not.
 
-Size each task for one builder in one focused session. A plan always ends each task with its acceptance criteria, even when that is only the repo's check command.
+Size each task for one builder in one focused session. A plan always ends each task with its acceptance criteria, even when that is only the build and trying it out.
 
 **Rescope.** After two failed verifications, read the task, the verify reports (comments on its issue:
 `gh issue view <ref> --comments`), and the branch. Then write a new plan file holding only the revised task

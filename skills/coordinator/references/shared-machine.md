@@ -3,9 +3,10 @@
 Read this when builders and verifiers run on the same machine as you and each other. The role prompts carry the
 worker side (long commands in the background, own log names, own processes only, no long waits). This is your side.
 
-- **Hold long waits yourself.** A worker blocked in a long sleep cannot be steered. Split a task with a long wait
-  (an instance sleeping, a deploy settling): a short worker starts it and records the time, you wait with a
-  background timer, and a fresh short worker measures the result.
+- **Hold long waits on the outside world yourself.** A worker blocked in a long sleep cannot be steered. Split a
+  task that waits on the outside world (a deploy settling, an instance sleeping, anything over about 15 minutes):
+  a short worker starts it and records the time, you wait with a background timer, and a fresh short worker
+  measures the result. A test or check run is not such a wait: the worker runs it in the background and waits.
 - **Watch for stalls.** A worker saying it is "waiting for the check" is a claim. If its log has not changed in
   about 20 minutes, ask it what the log shows, or stop it and redispatch. Stop finished workers that still hold
   background work.
