@@ -25,7 +25,12 @@ usage() {
 }
 
 MAIN="$(git rev-parse --path-format=absolute --git-common-dir 2> /dev/null)" || die "not inside a git repository"
-MAIN="$(dirname "$MAIN")"
+# A submodule's common dir is <super>/.git/modules/<name>; its checkout is core.worktree.
+if wt_rel="$(git --git-dir="$MAIN" config core.worktree 2> /dev/null)"; then
+  MAIN="$(cd "$MAIN" && cd "$wt_rel" && pwd)"
+else
+  MAIN="$(dirname "$MAIN")"
+fi
 CONFIG="$MAIN/.agents/coordinator.md"
 
 # cfg <key>: the value of a "key: value" line in the config, if any.

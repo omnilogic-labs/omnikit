@@ -49,7 +49,12 @@ usage() {
 
 command -v realpath > /dev/null && SELF="$(realpath "$0")" || SELF="$0"
 MAIN="$(git rev-parse --path-format=absolute --git-common-dir 2> /dev/null)" || die "not inside a git repository"
-MAIN="$(dirname "$MAIN")"
+# A submodule's common dir is <super>/.git/modules/<name>; its checkout is core.worktree.
+if wt_rel="$(git --git-dir="$MAIN" config core.worktree 2> /dev/null)"; then
+  MAIN="$(cd "$MAIN" && cd "$wt_rel" && pwd)"
+else
+  MAIN="$(dirname "$MAIN")"
+fi
 CONFIG="$MAIN/.agents/coordinator.md"
 FILE="$MAIN/.agents/ledger.md"
 QUEUE="$MAIN/.agents/ledger-queue.jsonl"
