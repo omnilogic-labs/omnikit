@@ -1,7 +1,7 @@
 # Workers on one shared machine
 
 Read this when builders and verifiers run on the same machine as you and each other. The role prompts carry the
-worker side (timeouts, own log names, own processes only, no long waits). This is your side.
+worker side (long commands in the background, own log names, own processes only, no long waits). This is your side.
 
 - **Hold long waits yourself.** A worker blocked in a long sleep cannot be steered. Split a task with a long wait
   (an instance sleeping, a deploy settling): a short worker starts it and records the time, you wait with a

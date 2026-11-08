@@ -72,8 +72,8 @@ models. Read hosts.md once at the start, and `references/shared-machine.md` when
 4. **Fix.** Post every verdict: `ledger note <task> --from <worktree> --head "Verify round n: PASS|FAIL"`. On any
    FAIL, UNVERIFIED, MISSES, or UNJUDGED, send those lines back to the builder and set `fixing --round n`. After the
    second failed round, dispatch a planner to rescope; import its plan and set the old task `dropped`.
-5. **Pass.** When every check is PASS and every judged goal is MEETS or CLOSE, set `passed`. CLOSE lines stay in
-   the verdict comment; `ledger status` lists them for the owner's milestone look.
+5. **Pass.** When every check is PASS and every judged goal is MEETS or CLOSE, set `passed` (`ledger status` lists
+   CLOSE lines). A check left UNVERIFIED until a deploy is run by a verifier right after it, before the task is done.
 6. **Integrate.** When the whole wave is `passed`:
    - create an integration worktree with `scripts/wt create <wave>`;
    - run `scripts/wt land <task> --into <prefix><wave>` for each task: it rebases the task branch onto the
