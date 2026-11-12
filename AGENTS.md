@@ -15,6 +15,7 @@ Cross-platform agent skills by Omnilogic Labs, for Claude Code, Codex, and Antig
 
 ## Skills
 
+- apollo: Apollo.io people and company search and enrichment, credit-aware
 - agent-browser: drive the agent-browser CLI
 - artistic-vision: Gemini image generation and editing, Sharp processing
 - coordinator: run multi-step work through planner, builder, and verifier agents

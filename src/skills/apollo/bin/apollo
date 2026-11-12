@@ -1,0 +1,521 @@
+#!/bin/bash
+# apollo: Apollo.io REST API helper that keeps credit spend explicit and never
+# pays twice for the same data.
+#
+# Free commands (credits, people) run freely. Commands that spend credits
+# (enrich, org, companies, and `api` on a known paid path) refuse to run
+# without --spend, print the most they can cost first, and report what Apollo
+# says was actually used afterwards.
+#
+# Every paid result is cached on disk (APOLLO_CACHE_DIR, default
+# ~/.local/share/apollo) and reused before any paid call. --refresh bypasses it.
+#
+# Key: APOLLO_API_KEY, else the file in APOLLO_API_KEY_FILE, else
+# ~/.config/apollo/api_key. Needs curl, jq and sha1sum. Status goes to stderr,
+# data to stdout.
+set -e
+
+BASE="https://api.apollo.io/api/v1"
+CACHE="${APOLLO_CACHE_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/apollo}"
+
+usage() {
+  cat >&2 << 'EOF'
+Usage: apollo <command> [options]
+
+Free (0 credits):
+  credits                         Lead and direct dial credits left this cycle.
+  people [filters]                Search people. Returns ids, names (last name
+                                  masked), titles, companies, has_email, and
+                                  whether the person is already in the cache.
+                                  No emails or phones.
+    --title T        (repeatable) job title, loose match
+    --exact-titles   only strict title matches
+    --not-title T    (repeatable) exclude current title
+    --seniority S    (repeatable) owner founder c_suite partner vp head
+                     director manager senior entry intern
+    --location L     (repeatable) where the person lives: city, state, country
+    --domain D       (repeatable) employer domain, e.g. hubspot.com
+    --org-location L (repeatable) company HQ location
+    --employees R    (repeatable) company size range "lo,hi", e.g. 11,50
+    --keywords K     free text
+    --name N         person name
+    --page N         page number (default 1)
+    --per-page N     1..100 (default 25)
+  cache [show KEY]                Cache location and counts, or one cached
+                                  record by id, email, linkedin URL or domain.
+
+Spend credits (each needs --spend, unless every answer is already cached):
+  enrich --spend [who] [opts]     Contact data for people. 1 credit per match
+                                  (email + profile), 0 if no match, +8 per
+                                  mobile phone returned. Batched 10 per call.
+    who: Apollo person ids as arguments (from `people`), or "-" to read ids
+         from stdin, or one of --email E | --linkedin URL |
+         --name N --domain D (or --company C)
+    --personal-email  also reveal personal emails
+    --phone --webhook URL   reveal phones (async, delivered to URL; up to 9
+                            credits per person; never served from cache)
+  org --spend <domain>...         Company firmographics. 1 credit each.
+  companies --spend [filters]     Company search. 1 credit per page (up to 100).
+    --domain D, --org-location L, --employees R, --keywords K (company name
+    or keyword), --page N, --per-page N
+
+Raw:
+  api METHOD PATH [JSON]          Call any endpoint. PATH like /people/match.
+                                  Known paid paths need --spend and are cached
+                                  by exact request.
+
+Global: --json for Apollo's full records instead of compact TSV;
+        --refresh to ignore the cache and pay for fresh data.
+Key: APOLLO_API_KEY, APOLLO_API_KEY_FILE, or ~/.config/apollo/api_key.
+Cache: APOLLO_CACHE_DIR (default ~/.local/share/apollo).
+EOF
+  exit 2
+}
+
+die() {
+  echo "apollo: $*" >&2
+  exit 1
+}
+
+command -v jq > /dev/null 2>&1 || die "jq is required (https://jqlang.org)."
+command -v curl > /dev/null 2>&1 || die "curl is required."
+command -v sha1sum > /dev/null 2>&1 || die "sha1sum is required (coreutils)."
+
+load_key() {
+  [ -n "${APOLLO_API_KEY:-}" ] && return
+  local f="${APOLLO_API_KEY_FILE:-$HOME/.config/apollo/api_key}"
+  if [ -s "$f" ]; then
+    APOLLO_API_KEY="$(tr -d '\r\n' < "$f")"
+    return
+  fi
+  die "no API key. Export APOLLO_API_KEY, or put it in $f (chmod 600)."
+}
+
+# ---------- cache ----------
+# people/<id>.json   enriched person + ._cache {fetched_at, personal_email}
+# index/<sha1>       person id for a lookup key (email:, linkedin:, name:)
+# orgs/<domain>.json organization enrich response
+# requests/<sha1>.json  any other paid response, keyed by method+path+body
+
+cache_init() {
+  umask 077
+  mkdir -p "$CACHE/people" "$CACHE/index" "$CACHE/orgs" "$CACHE/requests"
+}
+
+sha() { printf '%s' "$1" | sha1sum | cut -c1-40; }
+
+# Atomic write of stdin to $1.
+cache_put() {
+  local tmp="$1.tmp.$$"
+  cat > "$tmp" && mv -f "$tmp" "$1"
+}
+
+norm_email() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'; }
+norm_linkedin() {
+  local u
+  u="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  u="${u#http://}"; u="${u#https://}"; u="${u#www.}"
+  u="${u%%\?*}"; u="${u%/}"
+  printf '%s' "$u"
+}
+norm_domain() {
+  local d
+  d="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  d="${d#http://}"; d="${d#https://}"; d="${d#www.}"; d="${d%%/*}"
+  printf '%s' "$d"
+}
+norm_name() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//'; }
+
+index_put() { [ -n "$2" ] && printf '%s\n' "$2" | cache_put "$CACHE/index/$(sha "$1")"; }
+index_get() {
+  local f="$CACHE/index/$(sha "$1")"
+  [ -s "$f" ] && head -n 1 "$f"
+}
+
+# Store one enriched person (JSON on stdin) and index every way to find it,
+# plus any extra lookup keys in EXTRA_KEYS (one per line).
+person_put() {
+  local p id email li dom name k
+  p="$(jq -c --arg t "$(date -u +%FT%TZ)" --argjson pe "$PERSONAL" '. + {_cache: {fetched_at: $t, personal_email: $pe}}')"
+  id="$(jq -r '.id // empty' <<< "$p")"
+  [ -n "$id" ] || return 0
+  printf '%s\n' "$p" | cache_put "$CACHE/people/$id.json"
+  email="$(jq -r '.email // empty' <<< "$p")"
+  li="$(jq -r '.linkedin_url // empty' <<< "$p")"
+  dom="$(jq -r '.organization.primary_domain // empty' <<< "$p")"
+  name="$(jq -r '.name // empty' <<< "$p")"
+  [ -n "$email" ] && index_put "email:$(norm_email "$email")" "$id"
+  [ -n "$li" ] && index_put "linkedin:$(norm_linkedin "$li")" "$id"
+  [ -n "$name" ] && [ -n "$dom" ] && index_put "name:$(norm_name "$name")|$(norm_domain "$dom")" "$id"
+  while IFS= read -r k; do [ -n "$k" ] && index_put "$k" "$id"; done <<< "${EXTRA_KEYS:-}"
+  return 0
+}
+
+# Print the cached person for id $1 if it satisfies this request, else fail.
+person_get() {
+  local f="$CACHE/people/$1.json"
+  [ "$REFRESH" = 0 ] && [ -s "$f" ] || return 1
+  if [ "$PERSONAL" = true ]; then
+    [ "$(jq -r '._cache.personal_email // false' "$f")" = true ] || return 1
+  fi
+  cat "$f"
+}
+
+# ---------- http ----------
+
+# call METHOD PATH [JSON_BODY] -> response body on stdout; exits non-zero on HTTP error.
+call() {
+  local method="$1" path="$2" body="${3:-}" resp code
+  path="${path#/}"
+  path="${path#api/}"
+  path="${path#v1/}"
+  local args=(-sS -X "$method" "$BASE/$path"
+    -H "x-api-key: $APOLLO_API_KEY"
+    -H "Content-Type: application/json"
+    -H "Cache-Control: no-cache"
+    -H "Accept: application/json"
+    -w $'\n%{http_code}')
+  [ -n "$body" ] && args+=(--data "$body")
+  resp="$(curl "${args[@]}")" || die "request to /$path failed (curl)."
+  code="${resp##*$'\n'}"
+  resp="${resp%$'\n'*}"
+  if [ "$code" -ge 400 ] 2> /dev/null; then
+    echo "apollo: HTTP $code from $method /$path" >&2
+    printf '%s\n' "$resp" | jq . 2> /dev/null >&2 || printf '%s\n' "$resp" >&2
+    case "$code" in
+      401) echo "apollo: the key was rejected. Check APOLLO_API_KEY." >&2 ;;
+      403) echo "apollo: this key lacks access to /$path. A master API key covers every endpoint." >&2 ;;
+      429) echo "apollo: rate limited. Wait and retry." >&2 ;;
+    esac
+    exit 1
+  fi
+  printf '%s\n' "$resp"
+}
+
+# Credits consumed so far this cycle: "<lead> <direct_dial>".
+consumed() {
+  call POST /usage_stats/credit_usage_stats '{}' |
+    jq -r '[.credit_usage_stats.lead_credit.consumed // 0, .credit_usage_stats.direct_dial_credit.consumed // 0] | @tsv'
+}
+
+# Wrap a spending call: show the ceiling, then the real usage afterwards.
+SPEND=0
+BEFORE=""
+spend_begin() {
+  [ "$SPEND" = 1 ] || die "this spends credits ($1). Rerun with --spend to confirm."
+  echo "apollo: may spend up to $1." >&2
+  BEFORE="$(consumed 2> /dev/null || true)"
+}
+spend_end() {
+  [ -n "$BEFORE" ] || return 0
+  local after
+  after="$(consumed 2> /dev/null || true)"
+  [ -n "$after" ] || return 0
+  read -r bl bd <<< "$BEFORE"
+  read -r al ad <<< "$after"
+  echo "apollo: used $((al - bl)) lead credits, $((ad - bd)) direct dial credits (Apollo's count can lag a few seconds)." >&2
+}
+
+is_paid_path() {
+  case "${1#/}" in
+    *people/match* | *people/bulk_match* | *organizations/enrich* | *organizations/bulk_enrich* | \
+      *mixed_companies/search* | *mixed_people/search*) return 0 ;;
+  esac
+  return 1
+}
+
+# Run a paid request through the request cache: print the cached response, or
+# pay for it (with the ceiling $4) and cache it.
+cached_request() {
+  local method="$1" path="$2" body="${3:-}" ceiling="$4" f out
+  f="$CACHE/requests/$(sha "$method ${path#/} $(jq -cS . <<< "${body:-null}" 2> /dev/null || printf '%s' "$body")").json"
+  if [ "$REFRESH" = 0 ] && [ -s "$f" ]; then
+    echo "apollo: from cache ($(date -u -r "$f" +%F 2> /dev/null || echo cached)), 0 credits. --refresh to pay for fresh data." >&2
+    cat "$f"
+    return
+  fi
+  spend_begin "$ceiling"
+  out="$(call "$method" "$path" "$body")"
+  printf '%s\n' "$out" | cache_put "$f"
+  printf '%s\n' "$out"
+  spend_end
+}
+
+# ---------- arguments ----------
+
+JSON=0
+REFRESH=0
+ARGS=()
+for a in "$@"; do
+  case "$a" in
+    --spend) SPEND=1 ;;
+    --json) JSON=1 ;;
+    --refresh) REFRESH=1 ;;
+    -h | --help) usage ;;
+    *) ARGS+=("$a") ;;
+  esac
+done
+set -- "${ARGS[@]}"
+
+CMD="${1:-}"
+[ -n "$CMD" ] || usage
+shift
+
+BODY='{}'
+push() { BODY="$(jq -c --arg k "$1" --arg v "$2" '.[$k] += [$v]' <<< "$BODY")"; }
+setv() { BODY="$(jq -c --arg k "$1" --arg v "$2" '.[$k] = $v' <<< "$BODY")"; }
+setn() { BODY="$(jq -c --arg k "$1" --argjson v "$2" '.[$k] = $v' <<< "$BODY")"; }
+need() { [ -n "${2:-}" ] || die "$1 needs a value."; }
+
+PERSONAL=false
+cache_init
+
+PERSON_TSV='["id","name","title","company","email","email_status","linkedin","location"],
+  (.[] | [.id, (.name // ""), (.title // ""), (.organization.name // ""), (.email // ""),
+    (.email_status // ""), (.linkedin_url // ""),
+    ([.city, .state, .country] | map(select(. != null and . != "")) | join(", "))])
+  | @tsv'
+
+case "$CMD" in
+  cache)
+    if [ "${1:-}" = show ]; then
+      k="${2:-}"
+      need "cache show" "$k"
+      if [ -s "$CACHE/people/$k.json" ]; then id="$k"
+      elif [[ "$k" == *@* ]]; then id="$(index_get "email:$(norm_email "$k")" || true)"
+      elif [[ "$k" == *linkedin.com* ]]; then id="$(index_get "linkedin:$(norm_linkedin "$k")" || true)"
+      elif [ -s "$CACHE/orgs/$(norm_domain "$k").json" ]; then jq . "$CACHE/orgs/$(norm_domain "$k").json"; exit 0
+      fi
+      [ -n "${id:-}" ] && [ -s "$CACHE/people/$id.json" ] || die "not in cache: $k"
+      jq . "$CACHE/people/$id.json"
+    else
+      echo "cache: $CACHE"
+      echo "people: $(find "$CACHE/people" -name '*.json' | wc -l)"
+      echo "orgs: $(find "$CACHE/orgs" -name '*.json' | wc -l)"
+      echo "other paid requests: $(find "$CACHE/requests" -name '*.json' | wc -l)"
+    fi
+    ;;
+
+  credits)
+    load_key
+    out="$(call POST /usage_stats/credit_usage_stats '{}')"
+    if [ "$JSON" = 1 ]; then
+      jq . <<< "$out"
+    else
+      jq -r '.credit_usage_stats as $c |
+        "lead credits: \($c.lead_credit.left_over) left of \($c.lead_credit.limit) (\($c.lead_credit.consumed) used)",
+        "direct dial credits used: \($c.direct_dial_credit.consumed // 0)",
+        "cycle ends: \(.current_credit_cycle.end_date // "?")"' <<< "$out"
+    fi
+    ;;
+
+  people)
+    load_key
+    setn per_page 25
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --title) need "$1" "$2"; push person_titles "$2"; shift ;;
+        --exact-titles) setn include_similar_titles false ;;
+        --not-title) need "$1" "$2"; push person_not_titles "$2"; shift ;;
+        --seniority) need "$1" "$2"; push person_seniorities "$2"; shift ;;
+        --location) need "$1" "$2"; push person_locations "$2"; shift ;;
+        --domain) need "$1" "$2"; push q_organization_domains_list "$2"; shift ;;
+        --org-location) need "$1" "$2"; push organization_locations "$2"; shift ;;
+        --employees) need "$1" "$2"; push organization_num_employees_ranges "$2"; shift ;;
+        --keywords) need "$1" "$2"; setv q_keywords "$2"; shift ;;
+        --name) need "$1" "$2"; setv q_person_name "$2"; shift ;;
+        --page) need "$1" "$2"; setn page "$2"; shift ;;
+        --per-page) need "$1" "$2"; setn per_page "$2"; shift ;;
+        *) die "people: unknown option $1" ;;
+      esac
+      shift
+    done
+    out="$(call POST /mixed_people/api_search "$BODY")"
+    echo "apollo: $(jq -r '.total_entries // 0' <<< "$out") matches, page $(jq -r '.page // 1' <<< "$BODY")." >&2
+    if [ "$JSON" = 1 ]; then
+      jq . <<< "$out"
+    else
+      have="$(ls "$CACHE/people" 2> /dev/null | sed -n 's/\.json$//p' | jq -Rsc 'split("\n") | map(select(. != "")) | map({(.): true}) | add // {}')"
+      jq -r --argjson have "$have" '["id","name","title","company","has_email","direct_phone","cached"],
+        (.people[] | [.id, ((.first_name // "") + " " + (.last_name_obfuscated // .last_name // "")),
+          (.title // ""), (.organization.name // ""), (.has_email // false),
+          ((.has_direct_phone // false) | tostring | if startswith("Maybe") then "maybe" else . end),
+          ($have[.id] // false)])
+        | @tsv' <<< "$out"
+    fi
+    ;;
+
+  enrich)
+    IDS=()
+    ONE='{}'
+    ONEKEYS=()
+    REVEAL='{}'
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --email) need "$1" "$2"; ONE="$(jq -c --arg v "$2" '.email = $v' <<< "$ONE")"; shift ;;
+        --linkedin) need "$1" "$2"; ONE="$(jq -c --arg v "$2" '.linkedin_url = $v' <<< "$ONE")"; shift ;;
+        --name) need "$1" "$2"; ONE="$(jq -c --arg v "$2" '.name = $v' <<< "$ONE")"; shift ;;
+        --domain) need "$1" "$2"; ONE="$(jq -c --arg v "$2" '.domain = $v' <<< "$ONE")"; shift ;;
+        --company) need "$1" "$2"; ONE="$(jq -c --arg v "$2" '.organization_name = $v' <<< "$ONE")"; shift ;;
+        --personal-email) PERSONAL=true; REVEAL="$(jq -c '.reveal_personal_emails = true' <<< "$REVEAL")" ;;
+        --phone) REVEAL="$(jq -c '.reveal_phone_number = true' <<< "$REVEAL")" ;;
+        --webhook) need "$1" "$2"; REVEAL="$(jq -c --arg v "$2" '.webhook_url = $v' <<< "$REVEAL")"; shift ;;
+        -) while IFS= read -r line; do
+             line="${line%%$'\t'*}"; line="${line//[[:space:]]/}"
+             [ -n "$line" ] && [ "$line" != id ] && IDS+=("$line")
+           done ;;
+        --*) die "enrich: unknown option $1" ;;
+        *) IDS+=("$1") ;;
+      esac
+      shift
+    done
+    PHONE="$(jq -r '.reveal_phone_number // false' <<< "$REVEAL")"
+    if [ "$PHONE" = true ]; then
+      [ "$(jq -r '.webhook_url // ""' <<< "$REVEAL")" != "" ] || die "enrich: --phone needs --webhook URL (Apollo delivers phones asynchronously)."
+      REFRESH=1 # phones arrive by webhook, so the cache never holds them
+      per=9
+    else
+      per=1
+    fi
+
+    # Lookup keys for the single --email/--linkedin/--name person, strongest first.
+    if [ "$ONE" != '{}' ]; then
+      v="$(jq -r '.email // empty' <<< "$ONE")"; [ -n "$v" ] && ONEKEYS+=("email:$(norm_email "$v")")
+      v="$(jq -r '.linkedin_url // empty' <<< "$ONE")"; [ -n "$v" ] && ONEKEYS+=("linkedin:$(norm_linkedin "$v")")
+      v="$(jq -r '.name // empty' <<< "$ONE")"
+      d="$(jq -r '.domain // empty' <<< "$ONE")"
+      [ -n "$v" ] && [ -n "$d" ] && ONEKEYS+=("name:$(norm_name "$v")|$(norm_domain "$d")")
+    fi
+
+    # Split into cached hits and the misses we must pay for.
+    HITS='[]'
+    TODO=()      # detail objects to send
+    TODO_KEYS=() # extra index key per detail (for the single lookup), or ""
+    for id in "${IDS[@]}"; do
+      if p="$(person_get "$id")"; then HITS="$(jq -c --argjson p "$p" '. + [$p]' <<< "$HITS")"
+      else TODO+=("$(jq -cn --arg v "$id" '{id: $v}')"); TODO_KEYS+=(""); fi
+    done
+    if [ "$ONE" != '{}' ]; then
+      hit=""
+      for k in "${ONEKEYS[@]}"; do
+        id="$(index_get "$k" || true)"
+        [ -n "$id" ] && hit="$(person_get "$id" || true)" && [ -n "$hit" ] && break
+      done
+      if [ -n "$hit" ]; then HITS="$(jq -c --argjson p "$hit" '. + [$p]' <<< "$HITS")"
+      else TODO+=("$ONE"); TODO_KEYS+=("$(printf '%s\n' "${ONEKEYS[@]}")"); fi
+    fi
+    [ "$(jq length <<< "$HITS")" -gt 0 ] || [ "${#TODO[@]}" -gt 0 ] ||
+      die "enrich: give person ids, '-' for stdin, or --email/--linkedin/--name with --domain."
+    nh="$(jq length <<< "$HITS")"
+    [ "$nh" -gt 0 ] && echo "apollo: $nh from cache, 0 credits." >&2
+
+    FRESH='[]'
+    missed=0
+    n="${#TODO[@]}"
+    if [ "$n" -gt 0 ]; then
+      load_key
+      spend_begin "$((n * per)) lead credits for $n uncached people"
+      i=0
+      while [ "$i" -lt "$n" ]; do
+        chunk="$(printf '%s\n' "${TODO[@]:i:10}" | jq -sc .)"
+        body="$(jq -c --argjson d "$chunk" '. + {details: $d}' <<< "$REVEAL")"
+        out="$(call POST /people/bulk_match "$body")"
+        # matches[] lines up with details[]; null means no match.
+        j=0
+        while IFS= read -r m; do
+          if [ "$m" = null ] || [ -z "$m" ]; then
+            missed=$((missed + 1))
+          else
+            printf '%s\n' "$m" | EXTRA_KEYS="${TODO_KEYS[$((i + j))]}" person_put
+            FRESH="$(jq -c --argjson p "$m" '. + [$p]' <<< "$FRESH")"
+          fi
+          j=$((j + 1))
+        done < <(jq -c '.matches[]?' <<< "$out")
+        i=$((i + 10))
+      done
+      [ "$missed" -gt 0 ] && echo "apollo: $missed of $n had no match (no charge for those)." >&2
+    fi
+    ALL="$(jq -c --argjson f "$FRESH" '. + $f' <<< "$HITS")"
+    if [ "$JSON" = 1 ]; then jq . <<< "$ALL"; else jq -r "$PERSON_TSV" <<< "$ALL"; fi
+    [ "$n" -gt 0 ] && spend_end
+    exit 0
+    ;;
+
+  org)
+    [ $# -gt 0 ] || die "org: give one or more company domains."
+    TODO=()
+    for d in "$@"; do
+      d="$(norm_domain "$d")"
+      if [ "$REFRESH" = 1 ] || [ ! -s "$CACHE/orgs/$d.json" ]; then TODO+=("$d"); fi
+    done
+    [ "${#TODO[@]}" -lt "$#" ] && echo "apollo: $(($# - ${#TODO[@]})) from cache, 0 credits." >&2
+    if [ "${#TODO[@]}" -gt 0 ]; then
+      load_key
+      spend_begin "${#TODO[@]} lead credits for ${#TODO[@]} uncached companies"
+      for d in "${TODO[@]}"; do
+        out="$(call GET "/organizations/enrich?domain=$(jq -rn --arg v "$d" '$v|@uri')")"
+        # Cache only real matches; an empty answer can be retried later.
+        if [ "$(jq -r '.organization.id // empty' <<< "$out")" != "" ]; then
+          printf '%s\n' "$out" | cache_put "$CACHE/orgs/$d.json"
+        else
+          echo "apollo: no company found for $d." >&2
+        fi
+      done
+    fi
+    for d in "$@"; do
+      f="$CACHE/orgs/$(norm_domain "$d").json"
+      [ -s "$f" ] || continue
+      if [ "$JSON" = 1 ]; then
+        jq . "$f"
+      else
+        jq -r '.organization // {} |
+          "name: \(.name // "?")\ndomain: \(.primary_domain // "?")\nindustry: \(.industry // "?")\nemployees: \(.estimated_num_employees // "?")\nrevenue: \(.annual_revenue_printed // "?")\nfounded: \(.founded_year // "?")\nhq: \([.city, .state, .country] | map(select(. != null)) | join(", "))\nlinkedin: \(.linkedin_url // "?")\nid: \(.id // "?")\n"' "$f"
+      fi
+    done
+    [ "${#TODO[@]}" -gt 0 ] && spend_end
+    exit 0
+    ;;
+
+  companies)
+    setn per_page 25
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --domain) need "$1" "$2"; push q_organization_domains_list "$2"; shift ;;
+        --org-location | --location) need "$1" "$2"; push organization_locations "$2"; shift ;;
+        --employees) need "$1" "$2"; push organization_num_employees_ranges "$2"; shift ;;
+        --keywords) need "$1" "$2"; setv q_organization_name "$2"; shift ;;
+        --page) need "$1" "$2"; setn page "$2"; shift ;;
+        --per-page) need "$1" "$2"; setn per_page "$2"; shift ;;
+        *) die "companies: unknown option $1" ;;
+      esac
+      shift
+    done
+    load_key
+    out="$(cached_request POST /mixed_companies/search "$BODY" "1 lead credit for this page")"
+    echo "apollo: $(jq -r '.pagination.total_entries // "?"' <<< "$out") matches." >&2
+    if [ "$JSON" = 1 ]; then
+      jq . <<< "$out"
+    else
+      jq -r '["id","name","domain","employees","hq","linkedin"],
+        ((.organizations // []) + (.accounts // []) | .[] |
+          [.id, (.name // ""), (.primary_domain // ""), (.estimated_num_employees // "" | tostring),
+           ([.city, .state, .country] | map(select(. != null)) | join(", ")), (.linkedin_url // "")])
+        | @tsv' <<< "$out"
+    fi
+    ;;
+
+  api)
+    METHOD="${1:-}"
+    P="${2:-}"
+    [ -n "$METHOD" ] && [ -n "$P" ] || die "api: usage: apollo api METHOD PATH [JSON]"
+    load_key
+    if is_paid_path "$P"; then
+      out="$(cached_request "$METHOD" "$P" "${3:-}" "the credits $P charges")"
+    else
+      out="$(call "$METHOD" "$P" "${3:-}")"
+    fi
+    jq . <<< "$out" 2> /dev/null || printf '%s\n' "$out"
+    ;;
+
+  *) usage ;;
+esac

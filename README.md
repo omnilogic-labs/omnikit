@@ -6,6 +6,7 @@ A Claude Code plugin marketplace that also installs its skills for Codex and Ant
 
 One plugin, `omnilogic-labs`, carries every skill and agent. In Claude Code they are namespaced `omnilogic-labs:<name>`.
 
+- `apollo`: Apollo.io people and company search and enrichment, with credit spend kept explicit
 - `agent-browser`: drive Vercel's [agent-browser](https://github.com/vercel-labs/agent-browser) CLI
 - `artistic-vision`: Gemini image generation and editing, Sharp local processing
 - `coordinator`: run multi-step work through planner, builder, and verifier agents
@@ -61,7 +62,7 @@ What the installer handles for you on Windows:
 
 What the agents need to know, and the skills now say it where the scripts are called:
 
-- The helpers (`bin/art`, `bin/op-secret`, `bin/render-api`, `bin/render-ssh`, `scripts/wt`) are bash scripts with no extension. **Never run one directly from PowerShell or cmd.** Windows treats the file as a document and opens an "Open with" dialog, and the agent waits on a command that never finishes. Run them from Git Bash, or from PowerShell as `& "$env:ProgramFiles\Git\bin\bash.exe" <path> ...`.
+- The helpers (`bin/art`, `bin/op-secret`, `bin/render-api`, `bin/render-ssh`, `bin/apollo`, `scripts/wt`) are bash scripts with no extension. **Never run one directly from PowerShell or cmd.** Windows treats the file as a document and opens an "Open with" dialog, and the agent waits on a command that never finishes. Run them from Git Bash, or from PowerShell as `& "$env:ProgramFiles\Git\bin\bash.exe" <path> ...`.
 - A plain `bash` in PowerShell is often WSL (`C:\Windows\System32\bash.exe` comes first on a stock PATH), which cannot read `C:\` paths. Codex picks Git Bash on its own; agy and other PowerShell-first agents need the explicit path above.
 - Claude Code keeps `GEMINI_API_KEY` in its `settings.json` `env`, where Codex and agy cannot see it. For `artistic-vision` Gemini commands in those tools, set it as a user environment variable or follow `skills/artistic-vision/references/windows-powershell.md`.
 
