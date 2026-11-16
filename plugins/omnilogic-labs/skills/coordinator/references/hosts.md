@@ -56,6 +56,11 @@ background when you run several. Tell it `engine` (`codex` or `agy`), the `task`
 Optional: `model`, `effort`, `timeoutSec`, and `sandbox` (`none`, the default, so the worker can commit in its
 worktree and reach the network; or `workspace-write`, `read-only`).
 
+Keep `sandbox` at `none` for reviews and other read-only work too. Say "do not edit files" in the task text,
+and never write "read-only" near the dispatch settings: the runner may take it as `sandbox: read-only`. A
+sandboxed worker cannot run `tsx`, `pio` or the repo's check command, and cannot save its report outside `cwd`.
+Name a sandbox only when you actually want one, and write it as an explicit setting: `sandbox: workspace-write`.
+
 The runner shows as a subagent row: open it to see the worker's progress, or run `/workers`. It replies with the
 worker's exit code, job dir and final message, so its reply is the answer. Ignore the separate background task
 notification for the same job. Never call `mcp__omnilogic-labs__external_worker` yourself: from the main conversation it is refused.

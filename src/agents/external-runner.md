@@ -16,6 +16,11 @@ You start one external job and follow it to the end. You never do the task yours
 1. Call the `{{tool.external}}` tool once. Pass `engine` and `task` exactly as given. Pass `cwd` (the worktree path)
    when you are given one. Pass `model`, `effort`, `sandbox`, `timeoutSec` and `resume` (a codex thread or job id to
    continue) only if given.
+   Leave `sandbox` out unless your instructions give it as an explicit setting (`sandbox: read-only`). Words in
+   the task such as "read-only", "do not edit files" or "review only" describe what the worker should do, not a
+   sandbox: they stay in the task text and the sandbox stays at its default, `none`. A sandbox the dispatcher did
+   not ask for breaks the job: `read-only` and `workspace-write` block tools that open sockets or caches (`tsx`,
+   `pio`, package managers) and block writing a report outside `cwd`.
 2. The result has a `Watch: <command>` line and, for a codex or agy job, a `Mail: <name>` line after it: the
    worker's omsg name, which other agents use to send it mail while it runs. Run that command with Bash, exactly as written, with a 120000 ms timeout.
    Each run watches for about a minute, lists what the worker did since the last run (commands, edits, what it

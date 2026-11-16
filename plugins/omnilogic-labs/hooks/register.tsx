@@ -372,7 +372,9 @@ export const register: Register = (on) => {
             description:
               `Optional sandbox (default ${DEFAULT_SANDBOX}). none runs unsandboxed with no approval prompts, so ` +
               "the worker can commit in a worktree and reach the network; workspace-write limits writes to cwd; " +
-              "read-only allows no writes.",
+              "read-only allows no writes. Both sandboxes block tools that open sockets or caches (tsx, pio, " +
+              "package managers) and writing outside cwd. Pass a sandbox only when the dispatcher named one as a " +
+              "setting; a task that says read-only, review only or do not edit still runs with none.",
           },
           timeoutSec: {
             type: "number",
