@@ -28,7 +28,7 @@ previews:
   generation: automatic # automatic | manual | off (per-PR preview environments)
   expireAfterDays: 3
 
-services: [] # web, pserv, worker, cron, static
+services: [] # web (also static sites, via runtime: static), pserv, worker, cron
 databases: [] # managed Postgres
 envVarGroups: [] # shared env var sets referenced by services
 ```
@@ -39,9 +39,9 @@ Common fields (most service types):
 
 ```yaml
 services:
-  - type: web # web | pserv | worker | cron | static
+  - type: web # web | pserv | worker | cron (a static site is type web with runtime static)
     name: my-api # unique within the account
-    runtime: node # node | python | ruby | go | rust | elixir | docker | image
+    runtime: node # node | python | ruby | go | rust | elixir | docker | image | static
     # `env:` is the older alias for `runtime:`
     plan: starter # free | starter | standard | pro | ... (per service type)
     region: oregon # oregon | ohio | virginia | frankfurt | singapore
@@ -114,12 +114,18 @@ domains:
 
 ### Static sites
 
+There is no `type: static`; Render rejects it with `unknown type "static"`. A static site is
+`type: web` with `runtime: static`, and `staticPublishPath` is required. Use `previews.generation`,
+not the old `pullRequestPreviewsEnabled`.
+
 ```yaml
-- type: static
+- type: web
+  runtime: static
   name: my-site
   buildCommand: npm ci && npm run build
   staticPublishPath: ./dist
-  pullRequestPreviewsEnabled: true
+  previews:
+    generation: automatic # automatic | manual | off
   routes:
     - type: rewrite
       source: /*
