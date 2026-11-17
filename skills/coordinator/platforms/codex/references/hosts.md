@@ -22,7 +22,7 @@ reply of ten lines or fewer, also saved to the worktree's `ledger-reply.md` (`le
   `spawn_agent`, `agent_type: "<role>"` and the task as the `message`, then wait for it with `wait_agent`.
 - If the role is not an installed custom agent, read `roles/<role>.md` and pass its body as the start of the
   worker's prompt instead.
-- Pick each worker's model and effort by tier: deep is `gpt-6.1-sol` with effort `high`, fast is
+- Pick each worker's model and effort by tier: deep is `gpt-6.2-sol` with effort `high`, fast is
   `gpt-6-luna` with effort `medium`.
 - Without spawn tools, run a worker as a separate process from inside the worktree:
   `codex exec -C <worktree> --dangerously-bypass-approvals-and-sandbox -m <model> "<role prompt + task>"`.

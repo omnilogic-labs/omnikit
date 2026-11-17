@@ -29,10 +29,10 @@ reply of ten lines or fewer, also saved to the worktree's `ledger-reply.md` (`le
   `define_subagent`.
 - Leave `Workspace` at `inherit` (the current directory) and point the worker at its worktree path. Do not use
   `branch` or `share`, which make their own workspace.
-- For an external review (agy on `gemini-4-argon-high` or Codex on `gpt-6.1-sol`), dispatch a relay
+- For an external review (agy on `gemini-4-argon-high` or Codex on `gpt-6.2-sol`), dispatch a relay
   subagent with `invoke_subagent` (`TypeName: "self"`, `Model: "flash_lite"`) whose only job is to
   run the one CLI command (`agy --model gemini-4-argon-high -p "<prompt>" > <out>` or
-  `codex exec -m gpt-6.1-sol -c model_reasoning_effort=xhigh -s read-only -C <worktree> "<prompt>" > <out>`),
+  `codex exec -m gpt-6.2-sol -c model_reasoning_effort=xhigh -s read-only -C <worktree> "<prompt>" > <out>`),
   wait for it to finish, save the output to a file, and return the file path and exit code. Never pass `--effort` to
   `agy` when the model slug already pins the effort level.
 

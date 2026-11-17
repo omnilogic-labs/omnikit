@@ -29,4 +29,4 @@ Not used by default: Claude `{{claude.alt.stronger}}` (more capable than `{{clau
   for both tiers so the parent session's model decides, and `{{agy.runner.model}}` for a subagent that only runs a CLI
   command.
 
-Last checked 2026-10-23 against `agy models` and Codex's model list.
+Last checked 2026-11-17 against `agy models` and Codex's model list (Codex deep and review moved to gpt-6.2-sol, launched 2026-11-17).

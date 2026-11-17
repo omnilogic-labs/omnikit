@@ -46,7 +46,7 @@ describe("vars", () => {
   test("tier, effort, tool, host and agents.dir resolve per host", () => {
     expect(ok("{{tier.deep}} {{tier.fast}}", "claude")).toBe("opus sonnet");
     expect(ok("{{tier.deep}} {{effort.deep}} {{effort.fast}}", "codex")).toBe(
-      "gpt-6.1-sol high medium"
+      "gpt-6.2-sol high medium"
     );
     expect(ok("{{tier.deep}} {{cli.fast}}", "agy")).toBe("inherit gemini-3.8-flash-medium");
     expect(ok("{{tool.agent}} {{tool.agentType}}", "claude")).toBe("Agent subagent_type");
@@ -54,7 +54,7 @@ describe("vars", () => {
     expect(ok("{{tool.agent}} {{tool.message}} {{tool.selfType}} {{runner.model}}", "agy")).toBe(
       "invoke_subagent send_message self flash_lite"
     );
-    expect(ok("{{review.model}} {{review.effort}}", "codex")).toBe("gpt-6.1-sol xhigh");
+    expect(ok("{{review.model}} {{review.effort}}", "codex")).toBe("gpt-6.2-sol xhigh");
     expect(ok("{{review.model}}", "agy")).toBe("gemini-4-argon-high");
     expect(ok("{{host.name}} {{agents.dir}}", "agy")).toBe("agy ../../agents");
     expect(ok("{{ tier.deep }}", "claude")).toBe("opus");
@@ -491,7 +491,7 @@ describe("TOML", () => {
     expect(toml).toEqual({
       name: "q",
       description: 'Says "hi" \\ there',
-      model: "gpt-6.1-sol",
+      model: "gpt-6.2-sol",
       model_reasoning_effort: "high",
       developer_instructions: 'Body "x" \\ y\n',
     });
@@ -648,7 +648,7 @@ describe("portable root skills/", () => {
   test("a reference without one lands once, rendered any-OS", async () => {
     const g = await get();
     expect(g("skills/demo/references/plain.md")).toBeDefined();
-    expect(g("skills/demo/references/models.md")).toContain("gpt-6.1-sol");
+    expect(g("skills/demo/references/models.md")).toContain("gpt-6.2-sol");
     expect(g("skills/demo/references/os.md")).toContain("On Windows (Git Bash):");
     for (const h of HOST_NAMES) {
       expect(g(`skills/demo/platforms/${h}/references/plain.md`)).toBeUndefined();

@@ -67,10 +67,10 @@ export const HOSTS: Record<HostName, Host> = {
   codex: {
     name: "codex",
     label: "Codex",
-    tier: { deep: "gpt-6.1-sol", fast: "gpt-6-luna" },
+    tier: { deep: "gpt-6.2-sol", fast: "gpt-6-luna" },
     effort: { deep: "high", fast: "medium" },
-    cli: { deep: "gpt-6.1-sol", fast: "gpt-6-luna" },
-    review: { model: "gpt-6.1-sol", effort: "xhigh" },
+    cli: { deep: "gpt-6.2-sol", fast: "gpt-6-luna" },
+    review: { model: "gpt-6.2-sol", effort: "xhigh" },
     alt: { frontier: "gpt-6-astra" },
     tool: { agent: "spawn_agent" },
     root: "dist/codex",

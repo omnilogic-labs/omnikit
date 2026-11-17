@@ -35,7 +35,7 @@ do that in their own contexts and send back short reports.
 The role prompts are in this skill's folder: `roles/planner.md`, `roles/builder.md`, and `roles/verifier.md`.
 
 On Codex, dispatch the installed custom agent by name with `spawn_agent`, or paste the role file's body. Deep is
-`gpt-6.1-sol` (effort `high`) and fast is `gpt-6-luna` (effort `medium`).
+`gpt-6.2-sol` (effort `high`) and fast is `gpt-6-luna` (effort `medium`).
 
 How to dispatch each role is in `references/hosts.md`; `references/models.md` maps each tier to every host's
 models. Read hosts.md once at the start, and `references/shared-machine.md` when workers share one machine.
