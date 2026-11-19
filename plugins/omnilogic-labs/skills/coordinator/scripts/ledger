@@ -6,8 +6,8 @@ set -e
 #   ledger config                    print mode, repo, run, project and plan dir
 #   ledger labels                    create the label set (idempotent)
 #   ledger init <goal>               open a run epic (or start .agents/ledger.md)
-#   ledger import <plan.md>          one task issue per "## Task: <name>", as
-#                                    sub-issues of the run; skips existing names
+#   ledger import <plan.md>          one task issue per "## Task: <name>", under a
+#                                    group per plan in the run; skips existing names
 #   ledger state <task> <state> [--round N]
 #                                    planned building verifying fixing passed
 #                                    blocked merged dropped
@@ -266,13 +266,47 @@ remember_run() {
   echo "$1" > "$RUNFILE"
 }
 
-# subissues <run>: number, state, task name and node id for each sub-issue.
-subissues() {
-  gq -F n="$1" -f owner="$OWNER" -f name="$NAME" -f query='
+# A run's sub-issues are tasks or groups (label "group"); a group's sub-issues are
+# tasks. GitHub caps a parent at 100 sub-issues, so import puts each plan's tasks in
+# groups of at most GROUP_SIZE. Every read walks both levels, in run order.
+GROUP_SIZE="${LEDGER_GROUP_SIZE:-90}"
+SUB_CAP=100
+
+# children_json <n> <fields>: the sub-issues of issue n, one JSON object per line.
+children_json() {
+  local out
+  out="$(gq -F n="$1" -f owner="$OWNER" -f name="$NAME" -f query='
     query($owner: String!, $name: String!, $n: Int!) {
       repository(owner: $owner, name: $name) { issue(number: $n) {
-        subIssues(first: 100) { nodes { number state title id } } } } }' \
-    --jq '.data.repository.issue.subIssues.nodes[] | "\(.number)\t\(.state)\t\(.title | split(": ")[0])\t\(.id)"'
+        subIssues(first: 100) { nodes { number title labels(first: 20) { nodes { name } } '"$2"' } } } } }')" \
+    || return 1
+  printf '%s' "$out" | jq -c '.data.repository.issue.subIssues.nodes[]'
+}
+
+# run_nodes <run> <fields>: every task of the run, groups expanded in place, one JSON
+# object per line with .group set to its group's key ("" for a task directly under the run).
+run_nodes() {
+  local f g key line
+  f="$(mktemp "$TMP/nodes.XXXXXX")"
+  children_json "$1" "$2" > "$f" || die "could not read the sub-issues of #$1"
+  jq -c 'if any(.labels.nodes[]; .name == "group")
+    then {group_n: .number, group_t: .title} else . + {group: ""} end' "$f" > "$f.2"
+  while IFS= read -r line; do
+    case "$line" in
+      '{"group_n":'*)
+        g="$(printf '%s' "$line" | jq -r .group_n)"
+        key="$(printf '%s' "$line" | jq -r '.group_t | ltrimstr("Group: ") | sub(" \\([0-9]+\\)$"; "")')"
+        children_json "$g" "$2" > "$f.3" || die "could not read the sub-issues of group #$g"
+        jq -c --arg k "$key" 'select(any(.labels.nodes[]; .name == "group") | not) | . + {group: $k}' "$f.3"
+        ;;
+      *) printf '%s\n' "$line" ;;
+    esac
+  done < "$f.2"
+}
+
+# subissues <run>: number, state, task name, node id and group for each task, both levels.
+subissues() {
+  run_nodes "$1" 'state id' | jq -r '"\(.number)\t\(.state)\t\(.title | split(": ")[0])\t\(.id)\t\(.group)"'
 }
 
 # task_number <task>: an issue number from a number, #n or a task name.
@@ -316,6 +350,7 @@ state:passed|0e8a16|Verified; waiting for its wave to land
 state:blocked|b60205|Waiting on the owner or a credential
 tier:deep|5319e7|Deep-tier builder
 tier:fast|bfdadc|Fast-tier builder
+group|bfd4f2|A group of a run's tasks: one plan, at most 90 tasks
 EOF
   say "labels ready in $REPO"
 }
@@ -367,8 +402,36 @@ gh_init() {
   echo "${url##*/}"
 }
 
+# orphans: open task issues with no parent ("number\tname\tid"): an import that died
+# between creating an issue and linking it. Import adopts one whose name it needs.
+orphans() {
+  local after="" page
+  while :; do
+    page="$(gq -f owner="$OWNER" -f name="$NAME" ${after:+-f after="$after"} -f query='
+      query($owner: String!, $name: String!, $after: String) {
+        repository(owner: $owner, name: $name) {
+          issues(first: 100, after: $after, states: OPEN, labels: ["task"]) {
+            pageInfo { hasNextPage endCursor } nodes { number title id parent { number } } } } }')" \
+      || die "could not list open task issues"
+    printf '%s' "$page" | jq -r '.data.repository.issues.nodes[] | select(.parent == null)
+      | "\(.number)\t\(.title | split(": ")[0])\t\(.id)"'
+    after="$(printf '%s' "$page" | jq -r '.data.repository.issues.pageInfo | select(.hasNextPage) | .endCursor')"
+    [ -n "$after" ] || break
+  done
+}
+
+# link <parent id> <child id or url> <what>: make the child a sub-issue, or stop loudly.
+link() {
+  local arg=subIssueId err
+  case "$2" in https://*) arg=subIssueUrl ;; esac
+  err="$(gq -f p="$1" -f c="$2" -f query='
+    mutation($p: ID!, $c: '"$([ $arg = subIssueUrl ] && echo String || echo ID)"'!) {
+      addSubIssue(input: {issueId: $p, '"$arg"': $c}) { issue { number } } }' 2>&1 > /dev/null)" \
+    || die "could not link $3: ${err:-unknown error}. Nothing after it was imported; run the import again (it adopts the unlinked issue)"
+}
+
 gh_import() {
-  local plan="$1" run epic_id url n name wave tier deps goal d labels
+  local plan="$1" run epic_id url n name wave tier deps goal d labels key need free total groups k gid gnum id title
   [ -f "$plan" ] || die "no such plan: $plan"
   parse_plan "$plan" "$TMP"
   [ -s "$TMP/tasks.tsv" ] || die "no '## Task: <name>' sections in $plan"
@@ -378,31 +441,81 @@ gh_import() {
     RUN="$(gh_init "${goal:-$(basename "$plan" .md)}")"
   fi
   run="$(run_number)"
+  key="$(basename "$plan" .md)"
   : > "$TMP/new.txt"
   epic_id="$(gh issue view "$run" -R "$REPO" --json id --jq .id)"
   subissues "$run" > "$TMP/existing.tsv"
+  orphans > "$TMP/orphans.tsv"
+  # What to add: "name\tadopt-id or -", in plan order. Nothing is written until capacity is known.
+  : > "$TMP/todo.tsv"
   while IFS=$'\t' read -r name wave tier deps goal; do
     n="$(awk -F'\t' -v t="$name" '$3 == t { print $1; exit }' "$TMP/existing.tsv")"
     if [ -n "$n" ]; then
       say "$name exists as #$n; skipped"
       continue
     fi
-    labels="task,state:planned"
-    case "$tier" in deep | fast) labels="$labels,tier:$tier" ;; esac
-    if [ "$wave" != "-" ]; then
-      ensure_label "wave:$wave" c5def5 "Wave $wave"
-      labels="$labels,wave:$wave"
-    fi
-    quiet < "$TMP/task-$name.md" > "$TMP/t.md"
-    url="$(gh issue create -R "$REPO" --title "$(printf '%s: %s' "$name" "$goal" | quiet)" --label "$labels" --body-file "$TMP/t.md")"
-    pause
-    gq -f p="$epic_id" -f u="$url" -f query='
-      mutation($p: ID!, $u: String!) { addSubIssue(input: {issueId: $p, subIssueUrl: $u}) { issue { number } } }' > /dev/null
-    project_state "$url" planned
-    echo "$name" >> "$TMP/new.txt"
-    say "created ${url##*/} $name"
-    pause
+    id="$(awk -F'\t' -v t="$name" '$2 == t { print $1 "\t" $3; exit }' "$TMP/orphans.tsv")"
+    printf '%s\t%s\n' "$name" "${id:--}" >> "$TMP/todo.tsv"
   done < "$TMP/tasks.tsv"
+  need="$(wc -l < "$TMP/todo.tsv" | tr -d ' ')"
+  if [ "$need" -gt 0 ]; then
+    # This plan's groups ("Group: <plan>", then "Group: <plan> (2)", ...) and their free slots.
+    gq -F n="$run" -f owner="$OWNER" -f name="$NAME" -f query='
+      query($owner: String!, $name: String!, $n: Int!) {
+        repository(owner: $owner, name: $name) { issue(number: $n) {
+          all: subIssues { totalCount }
+          subIssues(first: 100) { nodes { number title id labels(first: 20) { nodes { name } } subIssues { totalCount } } } } } }' \
+      > "$TMP/groups.json" || die "could not read run #$run"
+    total="$(jq '.data.repository.issue.all.totalCount' "$TMP/groups.json")"
+    jq -r --arg t "Group: $key" '.data.repository.issue.subIssues.nodes[]
+      | select(any(.labels.nodes[]; .name == "group")) | select(.title == $t or (.title | startswith($t + " (")))
+      | "\(.id)\t\(.subIssues.totalCount)\t\(.number)\t\(.title)"' "$TMP/groups.json" > "$TMP/slots.tsv"
+    free="$(awk -F'\t' -v s="$GROUP_SIZE" '{ f += (s > $2 ? s - $2 : 0) } END { print f + 0 }' "$TMP/slots.tsv")"
+    groups=0
+    [ "$need" -le "$free" ] || groups="$(((need - free + GROUP_SIZE - 1) / GROUP_SIZE))"
+    [ $((total + groups)) -le "$SUB_CAP" ] \
+      || die "run #$run has $total sub-issues; $need new tasks need $groups more groups, over GitHub's cap of $SUB_CAP. Nothing was created"
+    k="$(wc -l < "$TMP/slots.tsv" | tr -d ' ')"
+    while [ "$groups" -gt 0 ]; do
+      k=$((k + 1))
+      title="Group: $key"
+      [ "$k" = 1 ] || title="$title ($k)"
+      ensure_label group bfd4f2 "A group of a run's tasks: one plan, at most $GROUP_SIZE tasks"
+      printf 'Tasks imported from `%s`. The run is #%s.\n' "$(basename "$plan")" "$run" > "$TMP/g.md"
+      url="$(gh issue create -R "$REPO" --title "$title" --label group --body-file "$TMP/g.md")"
+      pause
+      link "$epic_id" "$url" "group ${url##*/} to run #$run"
+      printf '%s\t0\t%s\t%s\n' "$(gh issue view "${url##*/}" -R "$REPO" --json id --jq .id)" "${url##*/}" "$title" >> "$TMP/slots.tsv"
+      say "opened ${url##*/} $title"
+      groups=$((groups - 1))
+    done
+    while IFS=$'\t' read -r name n id; do
+      gid="" && read -r gid gnum < <(awk -F'\t' -v s="$GROUP_SIZE" '$2 < s { print $1 "\t" $3; exit }' "$TMP/slots.tsv") || true
+      [ -n "$gid" ] || die "no group has room for $name; this is a bug in ledger import"
+      if [ "$n" != - ]; then
+        link "$gid" "$id" "#$n $name to group #$gnum"
+        say "adopted unlinked #$n $name"
+      else
+        IFS=$'\t' read -r _ wave tier deps goal < <(awk -F'\t' -v t="$name" '$1 == t' "$TMP/tasks.tsv") || true
+        labels="task,state:planned"
+        case "$tier" in deep | fast) labels="$labels,tier:$tier" ;; esac
+        if [ "$wave" != "-" ]; then
+          ensure_label "wave:$wave" c5def5 "Wave $wave"
+          labels="$labels,wave:$wave"
+        fi
+        quiet < "$TMP/task-$name.md" > "$TMP/t.md"
+        url="$(gh issue create -R "$REPO" --title "$(printf '%s: %s' "$name" "$goal" | quiet)" --label "$labels" --body-file "$TMP/t.md")"
+        pause
+        link "$gid" "$url" "#${url##*/} $name to group #$gnum"
+        project_state "$url" planned
+        say "created ${url##*/} $name"
+      fi
+      awk -F'\t' -v g="$gid" 'BEGIN { OFS = "\t" } $1 == g { $2++ } { print }' "$TMP/slots.tsv" > "$TMP/slots2.tsv"
+      cat "$TMP/slots2.tsv" > "$TMP/slots.tsv"
+      echo "$name" >> "$TMP/new.txt"
+      pause
+    done < "$TMP/todo.tsv"
+  fi
   body_of "$run" > "$TMP/run.md"
   if section_get plan < "$TMP/run.md" | grep -qx 'Not imported yet.'; then
     quiet < "$TMP/preamble.md" > "$TMP/pre.md"
@@ -416,22 +529,46 @@ gh_import() {
     section_replace plan "$TMP/pre.md" < "$TMP/run.md" > "$TMP/run2.md"
   fi
   [ ! -f "$TMP/run2.md" ] || gh issue edit "$run" -R "$REPO" --body-file "$TMP/run2.md" > /dev/null
-  # Dependencies: GitHub "blocked by" links. The task body keeps its "Depends on" line either way.
-  subissues "$run" > "$TMP/all.tsv"
+  # Dependencies: GitHub "blocked by" links, for every task of the plan, so a link missed
+  # earlier (its dependency not imported yet) is added now. Dependencies may cross groups.
+  run_nodes "$run" 'id blockedBy(first: 50) { nodes { number } }' > "$TMP/all.jsonl"
+  jq -r '"\(.number)\t-\t\(.title | split(": ")[0])\t\(.id)\t\([.blockedBy.nodes[].number] | join(","))"' \
+    "$TMP/all.jsonl" > "$TMP/all.tsv"
+  : > "$TMP/missing.txt"
+  : > "$TMP/failed.txt"
+  local added=0 bn have
   while IFS=$'\t' read -r name wave tier deps goal; do
-    [ "$deps" != - ] && grep -qxF "$name" "$TMP/new.txt" || continue
-    n="$(awk -F'\t' -v t="$name" '$3 == t { print $4; exit }' "$TMP/all.tsv")"
+    [ "$deps" != - ] || continue
+    n="" && read -r n have < <(awk -F'\t' -v t="$name" '$3 == t { print $4 "\t" ($5 == "" ? "-" : $5); exit }' "$TMP/all.tsv") || true
+    [ -n "$n" ] || continue
     for d in ${deps//,/ }; do
-      d="$(awk -F'\t' -v t="$d" '$3 == t { print $4; exit }' "$TMP/all.tsv")"
-      [ -n "$d" ] || continue
-      gq -f i="$n" -f b="$d" -f query='
+      bn="" && read -r bn id < <(awk -F'\t' -v t="$d" '$3 == t { print $1 "\t" $4; exit }' "$TMP/all.tsv") || true
+      if [ -z "$bn" ]; then
+        echo "$name depends on $d, which is not in the run" >> "$TMP/missing.txt"
+        continue
+      fi
+      case ",$have," in *",$bn,"*) continue ;; esac
+      if gq -f i="$n" -f b="$id" -f query='
         mutation($i: ID!, $b: ID!) { addBlockedBy(input: {issueId: $i, blockingIssueId: $b}) { issue { number } } }' \
-        > /dev/null 2>&1 || true
+        > /dev/null 2> "$TMP/err"; then
+        added=$((added + 1))
+      else
+        echo "$name blocked by $d (#$bn): $(head -c 200 "$TMP/err")" >> "$TMP/failed.txt"
+      fi
       pause
     done
   done < "$TMP/tasks.tsv"
+  [ "$added" = 0 ] || say "added $added blocked-by links"
+  [ ! -s "$TMP/missing.txt" ] || {
+    say "dependencies not in the run (import their plan, then this one again):"
+    sed 's/^/  /' "$TMP/missing.txt" >&2
+  }
   awk -F'\t' -v r="$REPO" 'NR == FNR { want[$1] = 1; next } ($3 in want) { print $3 "\t" r "#" $1 }' \
     "$TMP/tasks.tsv" "$TMP/all.tsv"
+  [ ! -s "$TMP/failed.txt" ] || {
+    sed 's/^/  /' "$TMP/failed.txt" >&2
+    die "$(wc -l < "$TMP/failed.txt" | tr -d ' ') blocked-by links failed; run the import again"
+  }
 }
 
 STATES=" planned building verifying fixing passed blocked merged dropped "
@@ -610,14 +747,7 @@ gh_comments() {
 
 # run_tasks <run>: every task with its body and recent comments, as JSON lines.
 run_tasks() {
-  gq -F n="$1" -f owner="$OWNER" -f name="$NAME" -f query='
-    query($owner: String!, $name: String!, $n: Int!) {
-      repository(owner: $owner, name: $name) { issue(number: $n) {
-        subIssues(first: 100) { nodes {
-          number title state stateReason updatedAt body
-          labels(first: 20) { nodes { name } }
-          comments(last: 30) { nodes { createdAt body } } } } } } }' \
-    --jq '.data.repository.issue.subIssues.nodes[]'
+  run_nodes "$1" 'state stateReason updatedAt body comments(last: 30) { nodes { createdAt body } }'
 }
 
 gh_grep() {
@@ -664,12 +794,8 @@ gh_index() {
     say "saved $(cat "$TMP/ok") gists"
     return 0
   fi
-  gq -F n="$(run_number)" -f owner="$OWNER" -f name="$NAME" -f query='
-    query($owner: String!, $name: String!, $n: Int!) {
-      repository(owner: $owner, name: $name) { issue(number: $n) {
-        subIssues(first: 100) { nodes { number title state stateReason updatedAt labels(first: 20) { nodes { name } } } } } } }' \
-    --jq "$LEAN_DEFS"'.data.repository.issue.subIssues.nodes[]
-      | select('"$all"' == 1 or .state == "OPEN") | "\(.number)\t\(.updatedAt)\t\(tname)\t\(st)"' > "$TMP/now.tsv"
+  run_nodes "$(run_number)" 'state stateReason updatedAt' | jq -r "$LEAN_DEFS"'
+      select('"$all"' == 1 or .state == "OPEN") | "\(.number)\t\(.updatedAt)\t\(tname)\t\(st)"' > "$TMP/now.tsv"
   if [ "$mode" = stale ]; then
     awk -F'\t' 'FILENAME == ARGV[1] { at[$1] = $2; next } at[$1] != $2 { print $1 "\t" $2 }' "$INDEX" "$TMP/now.tsv" > "$PENDING"
     say "$(wc -l < "$PENDING" | tr -d ' ') stale of $(wc -l < "$TMP/now.tsv" | tr -d ' ')"
@@ -687,37 +813,40 @@ gh_index() {
 gh_ref() { echo "$REPO#$(task_number "$1")"; }
 
 gh_status() {
-  local filter=""
-  [ -z "$RUN" ] || filter="select(.number == ${RUN#\#}) |"
+  local r
   gq -f owner="$OWNER" -f name="$NAME" -f query='
     query($owner: String!, $name: String!) {
       repository(owner: $owner, name: $name) {
-        issues(first: 10, states: OPEN, labels: ["run"]) { nodes {
-          number title body
-          subIssues(first: 100) { nodes {
-            number title state stateReason
-            labels(first: 20) { nodes { name } }
-            blockedBy(first: 10) { nodes { number state } }
-            comments(last: 4) { nodes { body } }
-          } } } } } }' --jq '
+        issues(first: 10, states: OPEN, labels: ["run"]) { nodes { number title body } } } }' \
+    --jq '.data.repository.issues.nodes[]' | jq -c . > "$TMP/runs.jsonl"
+  while IFS= read -r r; do
+    [ -z "$RUN" ] || [ "$(printf '%s' "$r" | jq .number)" = "${RUN#\#}" ] || continue
+    run_nodes "$(printf '%s' "$r" | jq .number)" 'state stateReason
+      blockedBy(first: 10) { nodes { number state } }
+      comments(last: 4) { nodes { body } }' > "$TMP/st.jsonl"
+    jq -rn --argjson r "$r" --slurpfile t "$TMP/st.jsonl" '
     def name: .title | split(": ")[0];
     def lbl(p): [.labels.nodes[].name | select(startswith(p)) | ltrimstr(p)];
     def st: if .state == "CLOSED" then (if .stateReason == "NOT_PLANNED" then "dropped" else "merged" end)
             else (lbl("state:")[0] // "planned") end;
     def ref: "\(name) #\(.number)" + ([lbl("tier:")[], (lbl("round:")[] | "round " + .)]
       | if length == 0 then "" else " (\(join(", ")))" end);
-    .data.repository.issues.nodes[] | '"$filter"' . as $r
-    | [$r.subIssues.nodes[] | . + {s: st}] as $t
+    def wkey: capture("^(?<p>[^0-9]*)(?<n>[0-9]*)(?<s>.*)$") | [.p, (.n | tonumber? // 0), .s];
+    [$t[] | . + {s: st}] as $t
     | [$t[] | select(.s != "merged" and .s != "dropped")] as $open
+    # Groups run in order: the current one is the first group (or the run itself) with an open task.
+    | ($t | map(.group) | reduce .[] as $g ([]; if index([$g]) then . else . + [$g] end)) as $groups
+    | ([$groups[] as $g | select(any($open[]; .group == $g)) | $g][0]) as $cur
+    | [$open[] | select(.group == $cur)] as $here
     | "Run #\($r.number): \($r.title | ltrimstr("Run: "))",
       "Now:",
       (($r.body | capture("<!-- ledger:now -->\n(?<x>(?s:.*?))\n<!-- /ledger:now -->").x // "")
         | split("\n") | map(select(length > 0))[:8][] | "  " + .),
-      "Wave now: \([$open[] | lbl("wave:")[0] // empty] | sort_by(capture("^(?<p>[^0-9]*)(?<n>[0-9]*)(?<s>.*)$") | [.p, (.n | tonumber? // 0), .s]) | .[0] // "-")",
+      "Wave now: \([$here[] | lbl("wave:")[0] // empty] | sort_by(wkey) | .[0] // "-")\(if ($cur // "") != "" then " (\($cur))" else "" end)",
       (["building", "verifying", "fixing", "passed"][] as $s
         | [$open[] | select(.s == $s)] | select(length > 0)
         | "\($s): " + (map(ref) | join(", "))),
-      ([$open[] | select(.s == "planned")] as $p
+      ([$here[] | select(.s == "planned")] as $p
         | ([$p[] | select(all(.blockedBy.nodes[]; .state == "CLOSED"))] | select(length > 0)
             | "ready: " + (map(ref) | join(", "))),
           ([$p[] | select(any(.blockedBy.nodes[]; .state != "CLOSED"))] | select(length > 0)
@@ -725,10 +854,13 @@ gh_status() {
       ($open[] | select(.s == "blocked")
         | "blocked: \(ref): \((.comments.nodes[-1].body // "no reason recorded") | split("\n") | map(select(length > 0)) | (map(select(test("^(#+ |\\*\\*[^*]*\\*\\*:?$)") | not))[0] // .[0] // "no reason recorded")[:120])"),
       "merged: \([$t[] | select(.s == "merged")] | length), dropped: \([$t[] | select(.s == "dropped")] | length), open: \($open | length)",
+      (select($groups != [""]) | $groups[] as $g | [$t[] | select(.group == $g)] as $in
+        | "  \(if $g == "" then "(direct)" else $g end): \($in | length) tasks, open \([$in[] | select(.s != "merged" and .s != "dropped")] | length)"),
       ($t[] | . as $i | .comments.nodes[] | select(.body | startswith("**Verify"))
         | .body | split("\n")[] | select(test("\\bCLOSE\\b")) | "CLOSE \($i | ref): \(.[:120])"),
       "Rulings: \(($r.body | [scan("\n- [0-9]{4}-[0-9]{2}-[0-9]{2}, ")] | length)) (in the run body)",
       ""'
+  done < "$TMP/runs.jsonl"
 }
 
 # ------------------------------------------------------------------ file mode
