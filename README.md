@@ -9,6 +9,7 @@ One plugin, `omnilogic-labs`, carries every skill and agent. In Claude Code they
 - `apollo`: Apollo.io people and company search and enrichment, with credit spend kept explicit
 - `agent-browser`: drive Vercel's [agent-browser](https://github.com/vercel-labs/agent-browser) CLI
 - `artistic-vision`: Gemini image generation and editing, Sharp local processing
+- `bughunt`: dispatch bughunter agents that each find, fix and retest a bug in their own worktree
 - `coordinator`: run multi-step work through planner, builder, and verifier agents
 - `omsg`: message the owner and other agent sessions from the terminal
 - `onepassword`: read secrets through the `op` CLI
@@ -17,7 +18,7 @@ One plugin, `omnilogic-labs`, carries every skill and agent. In Claude Code they
 - `questionnaire`: turn a JSON list of decisions into a page the owner answers and pastes back
 - `render`: Render.com blueprints, SSH, and REST API
 
-Agents: `planner`, `builder`, `verifier`, `browser-buddy`, and `external-runner`.
+Agents: `planner`, `builder`, `verifier`, `browser-buddy`, `bughunter`, and `external-runner`.
 
 ### Kits
 

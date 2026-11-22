@@ -18,6 +18,7 @@ Cross-platform agent skills by Omnilogic Labs, for Claude Code, Codex, and Antig
 - apollo: Apollo.io people and company search and enrichment, credit-aware
 - agent-browser: drive the agent-browser CLI
 - artistic-vision: Gemini image generation and editing, Sharp processing
+- bughunt: dispatch bughunter agents, each in its own worktree, and collect what they found and fixed
 - coordinator: run multi-step work through planner, builder, and verifier agents
 - omsg: message the owner and other agent sessions with the omsg command
 - onepassword: read secrets through the op CLI
@@ -30,6 +31,7 @@ Cross-platform agent skills by Omnilogic Labs, for Claude Code, Codex, and Antig
 
 - planner (opus), builder (sonnet; opus for complex work), verifier (sonnet)
 - browser-buddy (haiku, medium effort): browser operator
+- bughunter (sonnet): finds one bug in the browser, has a deep-tier agent describe a fix, fixes, retests and commits in its own worktree
 - external-runner (haiku, low effort): runs one Codex or agy job via the external_worker tool, relays its progress, and returns the final message; the main thread may not call the tool itself
 
 ## Conventions

@@ -8,6 +8,7 @@ One plugin carrying every Omnilogic Labs skill and agent.
 
 - `agent-browser`: drive Vercel Labs' agent-browser CLI (snapshot-ref workflow, sessions, gotchas).
 - `artistic-vision`: Gemini-powered image intelligence plus Sharp-powered local image processing.
+- `bughunt`: dispatch bughunter agents that each find, fix and retest a bug in their own worktree.
 - `coordinator`: run multi-step work through planner, builder, and verifier agents.
 - `omsg`: message the owner and other agent sessions with the `omsg` command.
 - `onepassword`: reliable secret retrieval from 1Password through the `op` CLI.
@@ -18,7 +19,7 @@ One plugin carrying every Omnilogic Labs skill and agent.
 
 ## Agents and binaries
 
-- `agents/`: `planner`, `builder`, `verifier`, `external-runner`, and `browser-buddy`, a browser operator that returns a concise findings report.
+- `agents/`: `planner`, `builder`, `verifier`, `external-runner`, `bughunter` (finds, fixes and retests one bug in its own worktree), and `browser-buddy`, a browser operator that returns a concise findings report.
 - `bin/agent-browser`: bash shim that resolves the vendored `agent-browser` binary and guards one footgun (below). Claude Code puts `bin/` on `PATH` while the plugin is enabled.
 
 ## Dependencies
