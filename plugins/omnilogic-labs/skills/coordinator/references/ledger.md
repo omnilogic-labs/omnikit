@@ -6,9 +6,8 @@ never write to it.
 
 It has two backends, picked by the `Ledger` setting in `.agents/coordinator.md` (see `config.md`):
 
-- `github` (the default when `gh` is signed in and the origin is on GitHub): a run epic issue, one group
-  sub-issue per plan, and one task issue per task under its group, in the `Ledger repo` (default: the origin's
-  repo). See Groups.
+- `github` (the default when `gh` is signed in and the origin is on GitHub): a run epic issue plus one sub-issue
+  per task, in the `Ledger repo` (default: the origin's repo).
 - `file`: `.agents/ledger.md` in the main checkout, kept out of git through `.git/info/exclude`. Nothing about
   the ledger is ever committed in either mode.
 
@@ -20,7 +19,7 @@ It has two backends, picked by the `Ledger` setting in `.agents/coordinator.md` 
 | `config`                                         | nothing; prints mode, repo, run, project and plan dir                                |
 | `labels`                                         | creates the label set (idempotent; `init` and `import` call it)                      |
 | `init <goal>`                                    | opens the run epic                                                                   |
-| `import <plan.md>`                               | one task issue per `## Task: <name>` section, under the plan's group, with labels    |
+| `import <plan.md>`                               | one task issue per `## Task: <name>` section, as sub-issues of the run, with labels  |
 |                                                  | and "blocked by" links; skips names that already exist, so a rescope plan adds to it |
 | `state <task> <state> [--round n]`               | swaps the `state:` label (silent); `merged` and `dropped` close the issue            |
 | `note <task\|run> <file\|-> [--head TEXT]`       | a comment: a builder report, a verdict, a blocked reason                             |
@@ -70,26 +69,9 @@ A task issue's title is `<name>: <goal>` and its body is the planner's task sect
 - `**Owner ruling**, <date>, <how it arrived>` then the words as a quote block.
 - On the run: `**Wave <w> landed:** <sha>`, the tasks, and the check result.
 
-## Groups
-
-GitHub caps a parent at 100 sub-issues, so a run holds groups and a group holds tasks. `import` puts a plan's
-tasks under `Group: <plan file name>` (label `group`), and opens `Group: <plan> (2)` and on when a group has 90
-(`LEDGER_GROUP_SIZE`). Tasks directly under the run, as in older runs, still count. Every command sees tasks at
-both levels; a group is never a task. Task names are unique across the run, and "Depends on" may name a task in
-any group.
-
-Groups run in the run's order: `status` takes the first group with an open task as the current one, and its
-"Wave now", `ready` and `waiting` lines cover only that group (each plan numbers its waves from 1). Work in flight
-and blocked tasks show from every group, and one line per group gives its task and open counts.
-
-`import` checks capacity before it writes anything and stops if the run itself would pass 100. If a link fails
-it stops and says so; run it again. It adopts an open task issue with no parent whose name it needs instead of
-creating a second one, and it adds every missing "blocked by" link for the plan's tasks, including ones whose
-dependency was imported later. Dependencies not in the run are listed; failed links make it exit non-zero.
-
 ## Status
 
-`ledger status` makes one GraphQL query for the run and one per group, and prints about 30 lines:
+`ledger status` makes one GraphQL query and prints about 30 lines:
 
 ```text
 Run #12: Add a --json flag to every command
@@ -107,8 +89,7 @@ Rulings: 2 (in the run body)
 ```
 
 Each task shows its builder tier and fix round. `ready` tasks have every "blocked by" task closed; `waiting` ones
-do not. With groups, "Wave now" names the current group (`Wave now: 1 (02-milestone-1)`), and a line per group
-follows the counts. Read this, not the issues.
+do not. Read this, not the issues.
 
 ## Reading cheaply
 
