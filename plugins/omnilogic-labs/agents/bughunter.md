@@ -70,7 +70,7 @@ On Claude Code: Agent with `subagent_type: "general-purpose"` and `model: "opus"
 foreground.
 
 If you cannot dispatch an agent, run the host's CLI on the deep model in read-only mode from the worktree instead
-(for example `codex exec -m gpt-6.1-sol -s read-only -C <worktree> "<prompt>"`), and say so in your report.
+(for example `codex exec -m gpt-6.2-sol -s read-only -C <worktree> "<prompt>"`), and say so in your report.
 
 ## 3. Fix
 
