@@ -733,6 +733,10 @@ async function isExecutable(dir: string, rel: string): Promise<boolean> {
     const mode = p.stdout.toString().split(/\s/)[0];
     if (mode === "100755") return true;
     if (mode === "100644") return false;
+    // Not tracked (the --check build in a temp dir). Windows stat never reports an exec bit,
+    // so use the repo's rule instead: a file is executable exactly when it starts with "#!".
+    const head = await readFile(join(dir, rel)).catch(() => null);
+    return head !== null && head[0] === 0x23 && head[1] === 0x21;
   }
   const s = await stat(join(dir, rel));
   return (s.mode & 0o111) !== 0;

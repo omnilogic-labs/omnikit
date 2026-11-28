@@ -64,6 +64,7 @@ What the installer handles for you on Windows:
 What the agents need to know, and the skills now say it where the scripts are called:
 
 - The helpers (`bin/art`, `bin/op-secret`, `bin/render-api`, `bin/render-ssh`, `bin/apollo`, `scripts/wt`) are bash scripts with no extension. **Never run one directly from PowerShell or cmd.** Windows treats the file as a document and opens an "Open with" dialog, and the agent waits on a command that never finishes. Run them from Git Bash, or from PowerShell as `& "$env:ProgramFiles\Git\bin\bash.exe" <path> ...`.
+- Codex and agy run hook commands through cmd.exe or PowerShell, not Git Bash, so a bare `omsg hook ...` fails there (`'omsg' is not recognized`). On Windows the installer also links `bin/omsg.cmd` into `~/.local/bin`, a wrapper that hands the script to Git Bash, and writes the Codex and agy hooks as `omsg.cmd hook ...`. `omsg.cmd` works from cmd and PowerShell too.
 - A plain `bash` in PowerShell is often WSL (`C:\Windows\System32\bash.exe` comes first on a stock PATH), which cannot read `C:\` paths. Codex picks Git Bash on its own; agy and other PowerShell-first agents need the explicit path above.
 - Claude Code keeps `GEMINI_API_KEY` in its `settings.json` `env`, where Codex and agy cannot see it. For `artistic-vision` Gemini commands in those tools, set it as a user environment variable or follow `skills/artistic-vision/references/windows-powershell.md`.
 

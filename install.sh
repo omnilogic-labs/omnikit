@@ -39,6 +39,10 @@ CODEX_HOOKS="${CODEX_HOME:-$HOME/.codex}/hooks.json"
 AGY_HOOKS="$HOME/.gemini/config/hooks.json"
 BIN_DIR="$HOME/.local/bin"
 OMSG_SRC="$REPO_ROOT/plugins/omnilogic-labs/bin/omsg"
+# The command the Codex and agy hooks run. Set after OS detection: on Windows
+# those hosts run hooks through cmd.exe or PowerShell, which cannot run the
+# bash script, so the hooks call the omsg.cmd wrapper next to it.
+OMSG_HOOK_BIN="omsg"
 SKILLS_SRC="$REPO_ROOT/plugins/omnilogic-labs/skills"
 DIST="$REPO_ROOT/dist"
 MARKETPLACE="omnikit"
@@ -190,6 +194,7 @@ detect_os() {
   esac
 }
 OS="$(detect_os)"
+[ "$OS" = windows ] && OMSG_HOOK_BIN="omsg.cmd"
 case "$OS" in
   linux | wsl | macos | windows) ;;
   *)
@@ -509,15 +514,15 @@ install_agy() {
 # Prints ok|missing|stale (check), present|absent (find), or wrote|current.
 OMSG_HOOKS_JS='
 const fs = require("fs");
-const [mode, host, file] = process.argv.slice(1);
-const isOmsg = (c) => /(^|[\s/\\])omsg(\.exe)?\s+hook\s/.test(c || "");
+const [mode, host, file, bin = "omsg"] = process.argv.slice(1);
+const isOmsg = (c) => /(^|[\s/\\])omsg(\.exe|\.cmd)?\s+hook\s/.test(c || "");
 const codexEvents = { SessionStart: "start", PostToolUse: "post-tool", Stop: "stop", SessionEnd: "end" };
 const agyEvents = { SessionStart: "start", PreInvocation: "pre-invocation", Stop: "stop" };
 let cur = {};
 if (fs.existsSync(file)) {
   try { cur = JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) { console.error("cannot parse " + file); process.exit(2); }
 }
-const cmd = (ev) => "omsg hook " + ev + " --host " + host;
+const cmd = (ev) => bin + " hook " + ev + " --host " + host;
 function strip(root) {
   const out = JSON.parse(JSON.stringify(root));
   if (host === "codex") {
@@ -559,7 +564,7 @@ else if (mode === "remove") { if (has) { write(stripped); console.log("wrote"); 
 '
 
 omsg_hooks() {
-  bun -e "$OMSG_HOOKS_JS" "$@"
+  bun -e "$OMSG_HOOKS_JS" "$@" "$OMSG_HOOK_BIN"
 }
 
 # sync_hooks <codex|agy> <file>: installs the omsg entries in the full kit,
@@ -611,23 +616,26 @@ sync_hooks() {
 # install_omsg: puts the omsg shim on PATH (the full kit only; a kit removes
 # a link of ours). The shim resolves its own real path, so a symlink is enough.
 install_omsg() {
-  local dst="$BIN_DIR/omsg"
+  local dst="$BIN_DIR/omsg" link
   if [ -n "$KIT" ]; then
-    if [ -L "$dst" ] && into_repo "$dst"; then
-      if $CHECK; then
-        problem legacy "$dst"
-        return 0
+    for link in "$dst" "$dst.cmd"; do
+      if [ -L "$link" ] && into_repo "$link"; then
+        if $CHECK; then
+          problem legacy "$link"
+          continue
+        fi
+        $DRY_RUN || rm -f "$link"
+        say "  prune    $link (not part of kit $KIT)"
+        n_prune=$((n_prune + 1))
       fi
-      $DRY_RUN || rm -f "$dst"
-      say "  prune    $dst (not part of kit $KIT)"
-      n_prune=$((n_prune + 1))
-    fi
+    done
     return 0
   fi
   say ""
   say "omsg ($dst)"
   $DRY_RUN || mkdir -p "$BIN_DIR"
   link_into "$BIN_DIR" "$OMSG_SRC" omsg
+  [ "$OS" = windows ] && link_into "$BIN_DIR" "$OMSG_SRC.cmd" omsg.cmd
   case ":$PATH:" in
     *":$BIN_DIR:"*) ;;
     *) $CHECK || say "  warn     $BIN_DIR is not on PATH; add it so hooks and agents find omsg" ;;

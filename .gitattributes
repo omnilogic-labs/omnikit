@@ -2,3 +2,5 @@
 # defaults to core.autocrlf=true, which turns every script into CRLF: bash in
 # WSL then fails on the stray \r, and prettier --check reports every file.
 * text=auto eol=lf
+# cmd.exe misreads batch files with LF endings (labels, multi-line blocks).
+*.cmd text eol=crlf

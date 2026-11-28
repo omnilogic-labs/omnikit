@@ -343,7 +343,8 @@ check_hook_file() {
     result fail "$check" "$file missing (run: bash install.sh)"
     return 0
   fi
-  got="$(jq -r "$filter" "$file" 2> /dev/null | sort | tr '\n' ' ')"
+  # jq.exe on Windows ends lines with CRLF.
+  got="$(jq -r "$filter" "$file" 2> /dev/null | tr -d '\r' | sort | tr '\n' ' ')"
   want="$(printf '%s\n' "${@:4}" | sort | tr '\n' ' ')"
   if [ "$got" = "$want" ]; then
     result pass "$check" "$n omsg entries in $file"
@@ -372,17 +373,23 @@ check_omsg() {
     result fail omsg-path "$found is not this repo's shim ($want)"
   fi
 
+  # On Windows the Codex and agy hooks call the omsg.cmd wrapper (see install.sh).
+  local b=omsg
+  case "$(uname -s)" in
+    MINGW* | MSYS* | CYGWIN*) [ "${OMNIKIT_OS:-windows}" = windows ] && b=omsg.cmd ;;
+  esac
+
   if has codex || [ -d "$CODEX_AGENTS_DIR" ]; then
     check_hook_file codex-omsg-hooks "$CODEX_HOOKS" \
-      '[.hooks // {} | to_entries[] | .value[] | .hooks[] | .command | select(test("omsg hook "))] | .[]' \
-      "omsg hook start --host codex" "omsg hook post-tool --host codex" "omsg hook stop --host codex" "omsg hook end --host codex"
+      '[.hooks // {} | to_entries[] | .value[] | .hooks[] | .command | select(test("omsg(\\.cmd)? hook "))] | .[]' \
+      "$b hook start --host codex" "$b hook post-tool --host codex" "$b hook stop --host codex" "$b hook end --host codex"
   else
     result skip codex-omsg-hooks "codex not on PATH"
   fi
   if has agy || [ -d "$AGY_SKILLS_DIR" ]; then
     check_hook_file agy-omsg-hooks "$AGY_HOOKS" \
-      '[to_entries[] | .value | objects | to_entries[] | .value | arrays | .[] | .command | select(test("omsg hook "))] | .[]' \
-      "omsg hook start --host agy" "omsg hook pre-invocation --host agy" "omsg hook stop --host agy"
+      '[to_entries[] | .value | objects | to_entries[] | .value | arrays | .[] | .command | select(test("omsg(\\.cmd)? hook "))] | .[]' \
+      "$b hook start --host agy" "$b hook pre-invocation --host agy" "$b hook stop --host agy"
   else
     result skip agy-omsg-hooks "agy not on PATH"
   fi
